@@ -462,10 +462,10 @@ function TrackMap(p){
   function endDrag(){ if(dragRef.current!=null){ dragRef.current=null; api.saveTrack(p.trip.id,pts); } }
 
   function delPoint(id){ persist(pts.filter(function(pt){return pt.id!==id;})); setSel(null); }
-  function pinPhoto(id){
-    // erstes Foto der Reise als Thumbnail anpinnen (Demo); später Auswahl
-    var color=(p.photos[0]&&p.photos[0].color)||"#A855F7";
-    persist(pts.map(function(pt){ return pt.id===id?Object.assign({},pt,{photo:pt.photo?null:color}):pt; }));
+  function setPointPhoto(id, photo){
+    // photo = {color, caption} oder null (zum Entfernen)
+    persist(pts.map(function(pt){ return pt.id===id?Object.assign({},pt,{photo:photo?photo.color:null,photoCaption:photo?photo.caption:null}):pt; }));
+    setPicker(false);
   }
 
   // SVG-Pfad der Strecke
@@ -501,21 +501,32 @@ function TrackMap(p){
         }))),
     h("p",{className:"text-xs text-muted"},"Punkt ziehen zum Verschieben · antippen für Optionen. Hintergrund-Tracking braucht später eine native App."),
 
-    // Detail des gewählten Punkts: Thumbnails + Aktionen
+    // Detail des gewählten Punkts: aktuelles Foto + Aktionen
     selPt?h("div",{className:"card p-4 fade-in"},
       h("div",{className:"flex items-center justify-between"},
         h("div",null, h("p",{className:"font-medium"},selPt.label), h("p",{className:"text-xs text-muted"},selPt.time||"")),
         h("div",{className:"flex items-center gap-3"},
-          h("button",{className:"text-accent",title:"Foto anpinnen",onClick:function(){pinPhoto(selPt.id);}}, h(Icon,{name:"image-plus"})),
+          h("button",{className:"text-accent",title:"Foto anpinnen",onClick:function(){setPicker(true);}}, h(Icon,{name:"image-plus"})),
           h("button",{className:"text-signal",title:"Punkt löschen",onClick:function(){delPoint(selPt.id);}}, h(Icon,{name:"trash-2"})),
           h("button",{className:"text-muted",onClick:function(){setSel(null);}}, h(Icon,{name:"x"})))),
-      // Thumbnails der Fotos in dieser Reise
-      h("div",{className:"flex gap-2 mt-3 overflow-x-auto"},
-        (p.photos||[]).map(function(ph){
-          return h("div",{key:ph.id,title:ph.caption,style:{flex:"0 0 auto",width:56,height:56,borderRadius:8,background:"linear-gradient(135deg,"+ph.color+","+ph.color+"99)",boxShadow:"var(--glow)"}});
-        }),
-        (p.photos||[]).length===0?h("p",{className:"text-xs text-muted"},"Noch keine Fotos für diese Reise."):null)
-    ):null
+      // aktuell angepinntes Foto (falls vorhanden)
+      selPt.photo?h("div",{className:"flex items-center gap-3 mt-3"},
+        h("div",{style:{width:56,height:56,borderRadius:8,background:"linear-gradient(135deg,"+selPt.photo+","+selPt.photo+"99)",boxShadow:"var(--glow)"}}),
+        h("div",null, h("p",{className:"text-sm"},selPt.photoCaption||"Angepinntes Foto"),
+          h("button",{className:"text-xs text-signal",onClick:function(){setPointPhoto(selPt.id,null);}},"Entfernen"))
+      ):h("p",{className:"text-xs text-muted mt-3"},"Kein Foto angepinnt. Tippe auf das Bild-Symbol oben, um eins zu wählen.")
+    ):null,
+
+    // Foto-Auswahl-Popup
+    h(Modal,{open:picker,onClose:function(){setPicker(false);},title:"Foto anpinnen"},
+      (p.photos||[]).length===0
+        ? h("p",{className:"text-sm text-muted"},"Noch keine Fotos für diese Reise. Lade welche in der Galerie hoch.")
+        : h("div",{className:"grid grid-cols-3 gap-3"},
+            (p.photos||[]).map(function(ph){
+              return h("button",{key:ph.id,onClick:function(){setPointPhoto(selPt.id,{color:ph.color,caption:ph.caption});},className:"text-left"},
+                h("div",{className:"aspect-square rounded-lg flex items-end p-2",style:{background:"linear-gradient(135deg,"+ph.color+","+ph.color+"99)",boxShadow:"var(--glow)"}},
+                  h("span",{className:"text-white",style:{fontSize:"10px",fontWeight:600}},ph.caption)));
+            })))
   );
 }
 
