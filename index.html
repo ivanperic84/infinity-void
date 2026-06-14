@@ -6,925 +6,669 @@
 <title>Tabi — Reiseplaner</title>
 
 <!-- ============================================================
-     TABI · Single-File Reise-SPA
-     Tech: React 18 (CDN) · Tailwind (CDN) · Lucide Icons (CDN)
-     Backend: Supabase ist als austauschbarer "api"-Layer
-              vorbereitet (siehe Abschnitt [1] DATA / API LAYER).
-              Aktuell laufen alle Funktionen gegen Dummy-Daten
-              + localStorage, damit das UI sofort testbar ist.
+     TABI · Single-File Reise-SPA  (robuste Version)
+     - KEIN Browser-Babel mehr  -> lädt auch lokal & auf dem Handy
+     - JSX ist als React.createElement geschrieben (h = Kürzel)
+     - React + ReactDOM + Lucide + Supabase via CDN
+     - Wenn CDN nicht lädt (offline), erscheint eine Fehlermeldung
+       statt eines weißen Bildschirms.
      ============================================================ -->
 
-<!-- Tailwind CSS -->
-<script src="https://cdn.tailwindcss.com"></script>
-<!-- React + ReactDOM -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<!-- Babel, damit wir JSX direkt im Browser schreiben können (kein Build-Schritt) -->
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<!-- Lucide Icons -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<!-- Supabase JS (für später; wird erst aktiv wenn du Keys einträgst) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- PWA: "Zum Homescreen hinzufügen" (Manifest inline als data-URI) -->
 <link rel="manifest" href='data:application/json,{"name":"Tabi","short_name":"Tabi","start_url":".","display":"standalone","background_color":"%23FAF8F4","theme_color":"%232D3A5E"}'>
 <meta name="theme-color" content="#2D3A5E">
 
 <style>
   :root{
-    --paper:#FAF8F4;      /* Off-White Papier */
-    --sumi:#1A1A1A;       /* Sumi-Tinte (Text) */
-    --ai:#2D3A5E;         /* Indigo Akzent */
-    --vermilion:#C8553D;  /* Zinnober Signal */
-    --line:#E7E2D8;       /* Trennlinien */
-    --muted:#8C8678;      /* gedämpfter Text */
+    --paper:#FAF8F4; --sumi:#1A1A1A; --ai:#2D3A5E; --vermilion:#C8553D; --line:#E7E2D8; --muted:#8C8678;
   }
-  body{ background:var(--paper); color:var(--sumi); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--sumi); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; }
   .font-display{ font-family:'Cormorant',serif; }
   .font-mono{ font-family:'JetBrains Mono',monospace; }
-  /* sanfte Tab-/View-Wechsel */
   .fade-in{ animation:fadeIn .35s ease both; }
   @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
-  /* dezenter Scrollbar */
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-thumb{ background:#d8d2c6; border-radius:4px; }
-  /* Karten-Pin Hintergrundgitter (stilisierte "Karte" ohne externe API) */
-  .map-grid{
-    background-color:#F0EDE5;
-    background-image:
-      linear-gradient(rgba(45,58,94,.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(45,58,94,.06) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
+  .map-grid{ background-color:#F0EDE5;
+    background-image:linear-gradient(rgba(45,58,94,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(45,58,94,.06) 1px,transparent 1px);
+    background-size:28px 28px; }
   @media (prefers-reduced-motion: reduce){ .fade-in{ animation:none; } }
   .icon{ width:1em; height:1em; display:inline-block; vertical-align:-.125em; }
+
+  /* ---- eigene Utility-Klassen (ersetzen Tailwind, kein CDN nötig) ---- */
+  .min-h-screen{min-height:100vh} .flex{display:flex} .hidden{display:none}
+  .items-center{align-items:center} .items-start{align-items:flex-start} .items-end{align-items:flex-end} .items-baseline{align-items:baseline}
+  .justify-center{justify-content:center} .justify-between{justify-content:space-between} .justify-around{justify-content:space-around}
+  .flex-col{flex-direction:column} .flex-wrap{flex-wrap:wrap} .flex-1{flex:1} .shrink-0{flex-shrink:0}
+  .gap-1{gap:.25rem} .gap-2{gap:.5rem} .gap-3{gap:.75rem} .gap-4{gap:1rem} .gap-8{gap:2rem}
+  .grid{display:grid} .text-center{text-align:center} .text-left{text-align:left} .text-right{text-align:right}
+  .relative{position:relative} .absolute{position:absolute} .fixed{position:fixed} .sticky{position:sticky}
+  .inset-0{inset:0} .inset-x-0{left:0;right:0} .top-0{top:0} .bottom-0{bottom:0}
+  .z-40{z-index:40} .z-50{z-index:50}
+  .w-full{width:100%} .h-14{height:3.5rem} .h-56{height:14rem}
+  .overflow-hidden{overflow:hidden} .overflow-y-auto{overflow-y:auto} .overflow-x-auto{overflow-x:auto}
+  .rounded-lg{border-radius:.5rem} .rounded-xl{border-radius:.75rem} .rounded-2xl{border-radius:1rem} .rounded-full{border-radius:9999px}
+  .border{border:1px solid var(--line)} .border-b{border-bottom:1px solid var(--line)} .border-t{border-top:1px solid var(--line)}
+  .bg-white{background:#fff} .bg-paper{background:var(--paper)}
+  .p-2{padding:.5rem} .p-3{padding:.75rem} .p-4{padding:1rem} .p-5{padding:1.25rem} .p-6{padding:1.5rem}
+  .px-2{padding-left:.5rem;padding-right:.5rem} .px-3{padding-left:.75rem;padding-right:.75rem} .px-5{padding-left:1.25rem;padding-right:1.25rem}
+  .py-1{padding-top:.25rem;padding-bottom:.25rem} .py-2{padding-top:.5rem;padding-bottom:.5rem} .py-3{padding-top:.75rem;padding-bottom:.75rem} .py-4{padding-top:1rem;padding-bottom:1rem} .py-6{padding-top:1.5rem;padding-bottom:1.5rem}
+  .mt-1{margin-top:.25rem} .mt-2{margin-top:.5rem} .mt-3{margin-top:.75rem} .mb-2{margin-bottom:.5rem} .mb-3{margin-bottom:.75rem} .mb-4{margin-bottom:1rem} .my-8{margin-top:2rem;margin-bottom:2rem}
+  .mx-auto{margin-left:auto;margin-right:auto} .max-w-sm{max-width:24rem} .max-w-lg{max-width:32rem} .max-w-3xl{max-width:48rem}
+  .text-xs{font-size:.75rem} .text-sm{font-size:.875rem} .text-2xl{font-size:1.5rem} .text-3xl{font-size:1.875rem} .text-4xl{font-size:2.25rem} .text-5xl{font-size:3rem} .text-6xl{font-size:3.75rem}
+  .font-medium{font-weight:500} .font-semibold{font-weight:600}
+  .uppercase{text-transform:uppercase} .tracking-wider{letter-spacing:.05em} .tracking-widest{letter-spacing:.1em} .italic{font-style:italic}
+  .line-through{text-decoration:line-through} .underline{text-decoration:underline} .whitespace-nowrap{white-space:nowrap}
+  .text-white{color:#fff} .text-ai{color:var(--ai)} .text-muted{color:var(--muted)} .text-vermilion{color:var(--vermilion)}
+  .bg-ai{background:var(--ai)} .leading-relaxed{line-height:1.625} .tabular-nums{font-variant-numeric:tabular-nums}
+  .space-y-2>*+*{margin-top:.5rem} .space-y-3>*+*{margin-top:.75rem} .space-y-6>*+*{margin-top:1.5rem}
+  .backdrop{backdrop-filter:blur(4px)} .cursor-pointer{cursor:pointer}
+  button{font-family:inherit; cursor:pointer; border:none; background:none; color:inherit}
+  input,select,textarea{font-family:inherit}
+  .inp{width:100%; padding:.5rem .75rem; background:#fff; border:1px solid var(--line); border-radius:.5rem; font-size:.875rem}
+  .inp:focus{outline:none; border-color:var(--ai); box-shadow:0 0 0 1px var(--ai)}
+  .btn-primary{background:var(--ai); color:#fff; border-radius:.5rem; font-weight:500}
+  .grid-2{grid-template-columns:1fr 1fr} .grid-cols-2{grid-template-columns:1fr 1fr} .grid-cols-3{grid-template-columns:1fr 1fr 1fr}
+  .aspect-square{aspect-ratio:1/1} .aspect-video{aspect-ratio:16/9}
+  .shadow-2xl{box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+  .opacity-90{opacity:.9}
+  @media(min-width:640px){
+    .sm\:flex{display:flex} .sm\:hidden{display:none} .sm\:grid-cols-2{grid-template-columns:1fr 1fr} .sm\:grid-cols-3{grid-template-columns:1fr 1fr 1fr}
+    .sm\:text-6xl{font-size:3.75rem} .sm\:text-4xl{font-size:2.25rem} .sm\:max-w-lg{max-width:32rem} .sm\:rounded-2xl{border-radius:1rem}
+    .sm\:p-8{padding:2rem} .sm\:gap-8{gap:2rem} .sm\:inline{display:inline} .sm\:pb-8{padding-bottom:2rem} .sm\:items-center{align-items:center} .sm\:p-4{padding:1rem}
+  }
 </style>
 </head>
 <body>
 <div id="root"></div>
+<div id="fatal" style="display:none; padding:2rem; text-align:center; font-family:sans-serif;">
+  <p style="font-size:1.2rem">Die App konnte nicht laden.</p>
+  <p style="color:#8C8678; font-size:.9rem">Bitte mit Internet öffnen (die Bausteine werden einmalig aus dem Netz geladen). Auf GitHub Pages funktioniert es zuverlässig.</p>
+</div>
 
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+<script>
+/* Fallback: wenn React nicht geladen wurde (kein Netz), zeige Hinweis statt Weiß */
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    if(!window.React || !window.ReactDOM){
+      document.getElementById("fatal").style.display="block";
+    }
+  }, 1500);
+});
+</script>
+
+<script>
+(function(){
+  if(!window.React || !window.ReactDOM){ return; } // Fallback-Hinweis greift
+  var h = React.createElement;
+  var useState=React.useState, useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef;
 
 /* ============================================================
-   [0] ICON-HELFER
-   Kleine Wrapper-Komponente für Lucide-Icons.
+   [0] ICON
    ============================================================ */
-function Icon({ name, className="", size }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.innerHTML = "";
-      const el = document.createElement("i");
-      el.setAttribute("data-lucide", name);
+function Icon(props){
+  var ref=useRef(null);
+  useEffect(function(){
+    if(ref.current){
+      ref.current.innerHTML="";
+      var el=document.createElement("i");
+      el.setAttribute("data-lucide", props.name);
       ref.current.appendChild(el);
-      if (window.lucide) window.lucide.createIcons({ icons: window.lucide.icons, attrs:{} });
+      if(window.lucide) window.lucide.createIcons();
     }
-  }, [name]);
-  const style = size ? { width:size, height:size } : {};
-  return <span ref={ref} className={"inline-flex items-center justify-center "+className} style={style}></span>;
+  },[props.name]);
+  var style = props.size ? {width:props.size,height:props.size} : {};
+  return h("span",{ref:ref, className:"inline-flex "+(props.className||""), style:style});
 }
 
 /* ============================================================
    [1] DATA / API LAYER  ← HIER kommt später Supabase rein
-   ------------------------------------------------------------
-   Alles, was mit "Daten holen / speichern / Login" zu tun hat,
-   läuft NUR über dieses "api"-Objekt. Wenn dein Supabase-Projekt
-   bereit ist, ersetzt du den Inhalt der Funktionen durch echte
-   Supabase-Aufrufe — der Rest der App muss NICHT angefasst werden.
-
-   SCHRITT FÜR SUPABASE (später):
-   1) SUPABASE_URL und SUPABASE_ANON_KEY unten eintragen.
-   2) In den Funktionen die "DUMMY"-Blöcke durch die
-      auskommentierten "SUPABASE"-Zeilen ersetzen.
    ============================================================ */
-
-const SUPABASE_URL = "";        // ← z.B. "https://xxxx.supabase.co"
-const SUPABASE_ANON_KEY = "";   // ← dein anon/public key
-
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var SUPABASE_URL="";        // ← "https://xxxx.supabase.co"
+var SUPABASE_ANON_KEY="";   // ← anon/public key
+var supabase=null;
+if(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase){
+  supabase=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-// localStorage-Helfer (Übergangsspeicher bis Supabase scharf ist)
-const store = {
-  get:(k,fallback)=>{ try{ const v=localStorage.getItem("tabi_"+k); return v?JSON.parse(v):fallback; }catch(e){ return fallback; } },
-  set:(k,v)=>{ try{ localStorage.setItem("tabi_"+k, JSON.stringify(v)); }catch(e){} },
+var store={
+  get:function(k,f){ try{var v=localStorage.getItem("tabi_"+k);return v?JSON.parse(v):f;}catch(e){return f;} },
+  set:function(k,v){ try{localStorage.setItem("tabi_"+k,JSON.stringify(v));}catch(e){} }
 };
 
-const api = {
-  /* ---------- AUTH ---------- */
-  async login(email, password){
-    // SUPABASE:
-    // const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    // if (error) throw error; return data.user;
+var api={
+  login:function(email,pw){
+    // SUPABASE: return supabase.auth.signInWithPassword({email,password:pw}).then(r=>{if(r.error)throw r.error;return r.data.user;});
+    if(!email||!pw) return Promise.reject(new Error("Bitte E-Mail und Passwort eingeben."));
+    var user={email:email,name:email.split("@")[0]}; store.set("session",user); return Promise.resolve(user);
+  },
+  logout:function(){ /* SUPABASE: supabase.auth.signOut(); */ store.set("session",null); return Promise.resolve(); },
+  getSession:function(){ return Promise.resolve(store.get("session",null)); },
 
-    // DUMMY: jeder nicht-leere Login klappt
-    if(!email || !password) throw new Error("Bitte E-Mail und Passwort eingeben.");
-    const user = { email, name: email.split("@")[0] };
-    store.set("session", user);
-    return user;
-  },
-  async logout(){
-    // SUPABASE: await supabase.auth.signOut();
-    store.set("session", null);
-  },
-  async getSession(){
-    // SUPABASE:
-    // const { data } = await supabase.auth.getSession();
-    // return data.session?.user ?? null;
-    return store.get("session", null);
-  },
+  fetchTrip:function(){ return Promise.resolve(store.get("trip",SEED.trip)); },
+  fetchRestaurants:function(){ return Promise.resolve(store.get("restaurants",SEED.restaurants)); },
+  saveRestaurants:function(l){ store.set("restaurants",l); },
+  fetchSpots:function(){ return Promise.resolve(store.get("spots",SEED.spots)); },
+  saveSpots:function(l){ store.set("spots",l); },
+  fetchStays:function(){ return Promise.resolve(store.get("stays",SEED.stays)); },
+  saveStays:function(l){ store.set("stays",l); },
+  fetchPacking:function(){ return Promise.resolve(store.get("packing",SEED.packing)); },
+  savePacking:function(l){ store.set("packing",l); },
+  fetchPhotos:function(){ return Promise.resolve(store.get("photos",SEED.photos)); },
+  savePhotos:function(l){ store.set("photos",l); },
 
-  /* ---------- DATEN (Realtime-fähig vorbereitet) ----------
-     Da min. 2 Personen befüllen, kommt später Realtime hierhin:
-     supabase.channel('trip').on('postgres_changes', …).subscribe()
-  */
-  async fetchTrip(){ return store.get("trip", SEED.trip); },
-  async fetchRestaurants(){ return store.get("restaurants", SEED.restaurants); },
-  async saveRestaurants(list){ store.set("restaurants", list); /* SUPABASE: upsert */ },
-  async fetchSpots(){ return store.get("spots", SEED.spots); },
-  async saveSpots(list){ store.set("spots", list); },
-  async fetchStays(){ return store.get("stays", SEED.stays); },
-  async saveStays(list){ store.set("stays", list); },
-  async fetchPacking(){ return store.get("packing", SEED.packing); },
-  async savePacking(list){ store.set("packing", list); },
-  async fetchPhotos(){ return store.get("photos", SEED.photos); },
-  async savePhotos(list){ store.set("photos", list); },
-
-  /* ---------- PLATZHALTER: brauchen zwingend Backend ---------- */
-  async uploadVoiceNote(blob){
-    // SUPABASE STORAGE:
-    // const path = `voice/${Date.now()}.webm`;
-    // const { data, error } = await supabase.storage.from('media').upload(path, blob);
-    // return supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
-    return Promise.resolve("local-only://voice-note"); // lokal nur als Hinweis
+  uploadVoiceNote:function(blob){ /* SUPABASE STORAGE upload */ return Promise.resolve("local-only://voice"); },
+  createShareLink:function(){
+    var t=Math.random().toString(36).slice(2,10);
+    return Promise.resolve(location.origin+location.pathname+"?view="+t);
   },
-  async createShareLink(){
-    // SUPABASE: erzeugt einen read-only Token/Eintrag für Beobachter.
-    // Hier nur ein simulierter Link.
-    const token = Math.random().toString(36).slice(2,10);
-    return `${location.origin}${location.pathname}?view=${token}`;
-  },
-
-  /* ---------- "Automatische Ergänzungen" via Claude-API ----------
-     Generiert z.B. einen kurzen Insider-Hinweis zu einem Ort.
-     Läuft live (kein Key nötig in dieser Umgebung). */
-  async aiSuggest(prompt){
-    try{
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-          model:"claude-sonnet-4-6",
-          max_tokens:1000,
-          messages:[{ role:"user", content: prompt }]
-        })
-      });
-      const data = await res.json();
-      return data.content.map(b=>b.type==="text"?b.text:"").join("").trim();
-    }catch(e){ return "Konnte gerade keinen Vorschlag laden."; }
+  aiSuggest:function(prompt){
+    return fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    }).then(function(r){return r.json();}).then(function(d){
+      return d.content.map(function(b){return b.type==="text"?b.text:"";}).join("").trim();
+    }).catch(function(){ return "Konnte gerade keinen Vorschlag laden."; });
   }
 };
 
 /* ============================================================
-   [2] DUMMY-DATEN (SEED)
-   Realistische Beispiele für Japan, Reisestart 9. Oktober.
+   [2] DUMMY-DATEN (SEED)  — Japan, Start 9. Oktober
    ============================================================ */
-const TRIP_START = "2026-10-09T08:00:00";
-
-const SEED = {
-  trip: {
-    title: "Japan",
-    subtitle: "Tokio · Kyoto · Kanazawa",
-    start: TRIP_START,
-    end: "2026-10-22T20:00:00",
-    days: [
-      { day:1, date:"09.10.", city:"Tokio", items:[
-        {time:"14:00", title:"Ankunft Haneda (HND)", note:"Limousine-Bus ins Hotel", icon:"plane-landing"},
-        {time:"18:30", title:"Spaziergang Yanaka", note:"Altes Tokio, ruhig", icon:"footprints"},
-      ]},
-      { day:2, date:"10.10.", city:"Tokio", items:[
-        {time:"09:00", title:"Teamlab Planets", note:"Tickets vorab!", icon:"sparkles"},
-        {time:"20:00", title:"Dinner: Den", note:"Reservierung bestätigt", icon:"utensils"},
-      ]},
-      { day:3, date:"11.10.", city:"Kyoto", items:[
-        {time:"08:12", title:"Shinkansen Tokio→Kyoto", note:"Wagen 7, Sitz 11A/B", icon:"train-front"},
-        {time:"15:00", title:"Fushimi Inari (spät)", note:"Weniger Menschen", icon:"torii-gate"},
-      ]},
+var TRIP_START="2026-10-09T08:00:00";
+var SEED={
+  trip:{
+    title:"Japan", subtitle:"Tokio · Kyoto · Kanazawa", start:TRIP_START, end:"2026-10-22T20:00:00",
+    days:[
+      {day:1,date:"09.10.",city:"Tokio",items:[
+        {time:"14:00",title:"Ankunft Haneda (HND)",note:"Limousine-Bus ins Hotel",icon:"plane"},
+        {time:"18:30",title:"Spaziergang Yanaka",note:"Altes Tokio, ruhig",icon:"footprints"}]},
+      {day:2,date:"10.10.",city:"Tokio",items:[
+        {time:"09:00",title:"teamLab Planets",note:"Tickets vorab!",icon:"sparkles"},
+        {time:"20:00",title:"Dinner: Den",note:"Reservierung bestätigt",icon:"utensils"}]},
+      {day:3,date:"11.10.",city:"Kyoto",items:[
+        {time:"08:12",title:"Shinkansen Tokio→Kyoto",note:"Wagen 7, Sitz 11A/B",icon:"train-front"},
+        {time:"15:00",title:"Fushimi Inari (spät)",note:"Weniger Menschen",icon:"mountain"}]}
     ]
   },
-
-  // Mehrere Guides wählbar (nicht nur Michelin)
-  restaurants: [
-    { id:1, name:"Den", city:"Tokio", guide:"Michelin", award:"2 Sterne", cuisine:"Modern Kaiseki",
-      status:"Bestätigt", confirmedAt:"10.10. um 20:00", deposit:true, cancelBy:"07.10.",
-      closed:"So", note:"Signature: Dentucky Fried Chicken" },
-    { id:2, name:"Sushi Saito", city:"Tokio", guide:"Michelin", award:"3 Sterne", cuisine:"Sushi",
-      status:"Angefragt", followUp:"15.09.", deposit:true, cancelBy:"—", closed:"So/Mo", note:"Über Concierge anfragen" },
-    { id:3, name:"Giro Giro Hitoshina", city:"Kyoto", guide:"Michelin", award:"Bib Gourmand", cuisine:"Kaiseki leger",
-      status:"Wunschliste", deposit:false, closed:"—", note:"Bezahlbares Kaiseki" },
-    { id:4, name:"Narisawa", city:"Tokio", guide:"50 Best", award:"World's 50 Best", cuisine:"Innovative",
-      status:"Wunschliste", deposit:true, closed:"So/Mo", note:"Sehr schwer zu bekommen" },
-    { id:5, name:"Ramen Sen-no-Kaze", city:"Kanazawa", guide:"Gault&Millau", award:"Empfehlung", cuisine:"Ramen",
-      status:"Wunschliste", deposit:false, closed:"Mi", note:"Mittags weniger Andrang" },
+  restaurants:[
+    {id:1,name:"Den",city:"Tokio",guide:"Michelin",award:"2 Sterne",cuisine:"Modern Kaiseki",status:"Bestätigt",confirmedAt:"10.10. um 20:00",deposit:true,cancelBy:"07.10.",closed:"So",note:"Signature: Dentucky Fried Chicken"},
+    {id:2,name:"Sushi Saito",city:"Tokio",guide:"Michelin",award:"3 Sterne",cuisine:"Sushi",status:"Angefragt",followUp:"15.09.",deposit:true,cancelBy:"—",closed:"So/Mo",note:"Über Concierge anfragen"},
+    {id:3,name:"Giro Giro Hitoshina",city:"Kyoto",guide:"Michelin",award:"Bib Gourmand",cuisine:"Kaiseki leger",status:"Wunschliste",deposit:false,closed:"—",note:"Bezahlbares Kaiseki"},
+    {id:4,name:"Narisawa",city:"Tokio",guide:"50 Best",award:"World's 50 Best",cuisine:"Innovative",status:"Wunschliste",deposit:true,closed:"So/Mo",note:"Sehr schwer zu bekommen"},
+    {id:5,name:"Ramen Sen-no-Kaze",city:"Kanazawa",guide:"Gault&Millau",award:"Empfehlung",cuisine:"Ramen",status:"Wunschliste",deposit:false,closed:"Mi",note:"Mittags weniger Andrang"}
   ],
-
-  spots: [
-    { id:1, name:"Omoide Yokocho", city:"Tokio", secret:3, tags:["Aussichtspunkt","Vintage"],
-      note:"Enge Gassen, Yakitori-Rauch", maps:"Omoide Yokocho Tokyo", hours:"ab 17:00" },
-    { id:2, name:"Nakano Broadway", city:"Tokio", secret:4, tags:["Vintage","Local Crafts"],
-      note:"Retro-Sammlerparadies", maps:"Nakano Broadway", hours:"10–20" },
-    { id:3, name:"Keage Incline", city:"Kyoto", secret:4, tags:["Lost Places","Aussichtspunkt"],
-      note:"Alte Bahntrasse, fotogen", maps:"Keage Incline Kyoto", hours:"immer" },
-    { id:4, name:"D&Department Kyoto", city:"Kyoto", secret:5, tags:["Local Crafts","Vintage"],
-      note:"Design-Laden im Tempel", maps:"D&Department Kyoto", hours:"11–18, Mi zu" },
+  spots:[
+    {id:1,name:"Omoide Yokocho",city:"Tokio",secret:3,tags:["Aussichtspunkt","Vintage"],note:"Enge Gassen, Yakitori-Rauch",maps:"Omoide Yokocho Tokyo",hours:"ab 17:00"},
+    {id:2,name:"Nakano Broadway",city:"Tokio",secret:4,tags:["Vintage","Local Crafts"],note:"Retro-Sammlerparadies",maps:"Nakano Broadway",hours:"10–20"},
+    {id:3,name:"Keage Incline",city:"Kyoto",secret:4,tags:["Lost Places","Aussichtspunkt"],note:"Alte Bahntrasse, fotogen",maps:"Keage Incline Kyoto",hours:"immer"},
+    {id:4,name:"D&Department Kyoto",city:"Kyoto",secret:5,tags:["Local Crafts","Vintage"],note:"Design-Laden im Tempel",maps:"D&Department Kyoto",hours:"11–18, Mi zu"}
   ],
-
-  stays: [
-    { id:1, type:"Unterkunft", name:"Hotel Niwa Tokyo", city:"Tokio", from:"09.10.", to:"11.10.",
-      detail:"Ryokan-Stil, zentral", icon:"bed-double" },
-    { id:2, type:"Transport", name:"Shinkansen Nozomi", city:"Tokio→Kyoto", from:"11.10. 08:12", to:"11.10. 10:25",
-      detail:"Reserviert, Wagen 7", icon:"train-front" },
-    { id:3, type:"Unterkunft", name:"Machiya Townhouse", city:"Kyoto", from:"11.10.", to:"16.10.",
-      detail:"Traditionelles Stadthaus", icon:"bed-double" },
-    { id:4, type:"Veranstaltung", name:"Kabuki-za Theater", city:"Tokio", from:"10.10. 16:30", to:"—",
-      detail:"Einzelakt-Ticket", icon:"ticket" },
+  stays:[
+    {id:1,type:"Unterkunft",name:"Hotel Niwa Tokyo",city:"Tokio",from:"09.10.",to:"11.10.",detail:"Ryokan-Stil, zentral",icon:"bed-double"},
+    {id:2,type:"Transport",name:"Shinkansen Nozomi",city:"Tokio→Kyoto",from:"11.10. 08:12",to:"11.10. 10:25",detail:"Reserviert, Wagen 7",icon:"train-front"},
+    {id:3,type:"Unterkunft",name:"Machiya Townhouse",city:"Kyoto",from:"11.10.",to:"16.10.",detail:"Traditionelles Stadthaus",icon:"bed-double"},
+    {id:4,type:"Veranstaltung",name:"Kabuki-za Theater",city:"Tokio",from:"10.10. 16:30",to:"—",detail:"Einzelakt-Ticket",icon:"ticket"}
   ],
-
-  packing: [
-    { id:1, label:"Reisepass + Kopie", done:true },
-    { id:2, label:"JR Pass / Suica-Karte", done:false },
-    { id:3, label:"Steckdosen-Adapter (Typ A)", done:false },
-    { id:4, label:"Leichte Regenjacke", done:false },
-    { id:5, label:"Bargeld (Yen)", done:false },
+  packing:[
+    {id:1,label:"Reisepass + Kopie",done:true},{id:2,label:"JR Pass / Suica-Karte",done:false},
+    {id:3,label:"Steckdosen-Adapter (Typ A)",done:false},{id:4,label:"Leichte Regenjacke",done:false},
+    {id:5,label:"Bargeld (Yen)",done:false}
   ],
-
-  photos: [
-    { id:1, city:"Tokio", caption:"Erster Abend in Yanaka", color:"#2D3A5E", comments:[{by:"Mira", text:"Wie schön ruhig dort!"}] },
-    { id:2, city:"Kyoto", caption:"Morgennebel am Fushimi Inari", color:"#C8553D", comments:[] },
-  ],
+  photos:[
+    {id:1,city:"Tokio",caption:"Erster Abend in Yanaka",color:"#2D3A5E",comments:[{by:"Mira",text:"Wie schön ruhig dort!"}]},
+    {id:2,city:"Kyoto",caption:"Morgennebel am Fushimi Inari",color:"#C8553D",comments:[]}
+  ]
 };
-
-// Guides + Auszeichnungen (für Filter & Eingabe)
-const GUIDES = {
-  "Michelin":   ["3 Sterne","2 Sterne","1 Stern","Bib Gourmand"],
+var GUIDES={
+  "Michelin":["3 Sterne","2 Sterne","1 Stern","Bib Gourmand"],
   "Gault&Millau":["19–20 Pkt","17–18 Pkt","15–16 Pkt","Empfehlung"],
-  "50 Best":    ["World's 50 Best","Asia's 50 Best"],
-  "Tabelog":    ["Gold","Silver","Bronze"],
+  "50 Best":["World's 50 Best","Asia's 50 Best"],
+  "Tabelog":["Gold","Silver","Bronze"]
 };
-const STATUS = {
-  "Wunschliste":{ bg:"bg-stone-100", text:"text-stone-600", dot:"#8C8678" },
-  "Angefragt":  { bg:"bg-amber-50",  text:"text-amber-700", dot:"#D9912B" },
-  "Bestätigt":  { bg:"bg-emerald-50",text:"text-emerald-700",dot:"#2F855A" },
+var STATUS={
+  "Wunschliste":{text:"#8C8678",dot:"#8C8678",bg:"#F2F0EA"},
+  "Angefragt":{text:"#B45309",dot:"#D9912B",bg:"#FEF6E7"},
+  "Bestätigt":{text:"#2F855A",dot:"#2F855A",bg:"#E9F5EF"}
 };
 
 /* ============================================================
-   [3] WIEDERVERWENDBARE UI-BAUSTEINE
+   [3] UI-BAUSTEINE
    ============================================================ */
-function Badge({ children, color, bg }){
-  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${bg||"bg-stone-100"} ${color||"text-stone-600"}`}>{children}</span>;
+function Badge(p){
+  return h("span",{className:"inline-flex items-center gap-1 rounded-full",
+    style:{padding:"2px 8px",fontSize:".75rem",fontWeight:500,background:p.bg||"#F2F0EA",color:p.color||"#57534E"}}, p.children);
 }
-
-function Modal({ open, onClose, title, children }){
-  if(!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-[var(--paper)] w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl border border-[var(--line)] shadow-2xl max-h-[90vh] overflow-y-auto fade-in">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] sticky top-0 bg-[var(--paper)]">
-          <h3 className="font-display text-2xl">{title}</h3>
-          <button onClick={onClose} className="p-2 -m-2 text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="x"/></button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
+function Modal(p){
+  if(!p.open) return null;
+  return h("div",{className:"fixed inset-0 z-50 flex sm:items-center justify-center",style:{alignItems:"flex-end",padding:0}},
+    h("div",{className:"absolute inset-0 backdrop",style:{background:"rgba(0,0,0,.3)"},onClick:p.onClose}),
+    h("div",{className:"relative bg-paper w-full sm:max-w-lg sm:rounded-2xl shadow-2xl fade-in",
+      style:{borderTopLeftRadius:"1rem",borderTopRightRadius:"1rem",border:"1px solid var(--line)",maxHeight:"90vh",overflowY:"auto"}},
+      h("div",{className:"flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-paper"},
+        h("h3",{className:"font-display text-2xl"},p.title),
+        h("button",{className:"text-muted",onClick:p.onClose}, h(Icon,{name:"x"}))),
+      h("div",{className:"p-5"}, p.children)
+    )
   );
 }
-
-function Field({ label, children }){
-  return (
-    <label className="block mb-3">
-      <span className="block text-xs uppercase tracking-wider text-[var(--muted)] mb-1">{label}</span>
-      {children}
-    </label>
-  );
+function Field(p){
+  return h("label",{className:"mb-3",style:{display:"block"}},
+    h("span",{className:"text-xs uppercase tracking-wider text-muted mb-2",style:{display:"block"}},p.label),
+    p.children);
 }
-const inputCls = "w-full px-3 py-2 bg-white border border-[var(--line)] rounded-lg text-sm focus:outline-none focus:border-[var(--ai)] focus:ring-1 focus:ring-[var(--ai)]";
-
-// Geheimtipp-Skala 1–5 als Schloss-Reihe
-function SecretScale({ value }){
-  return (
-    <span className="inline-flex gap-0.5" title={`Geheimtipp ${value}/5`}>
-      {[1,2,3,4,5].map(i=>(
-        <span key={i} className="text-sm" style={{ color: i<=value ? "var(--vermilion)" : "var(--line)" }}>
-          <Icon name="lock"/>
-        </span>
-      ))}
-    </span>
-  );
+function SecretScale(p){
+  var dots=[1,2,3,4,5].map(function(i){
+    return h("span",{key:i,className:"text-sm",style:{color:i<=p.value?"var(--vermilion)":"var(--line)"}}, h(Icon,{name:"lock"}));
+  });
+  return h("span",{className:"inline-flex gap-1",title:"Geheimtipp "+p.value+"/5"}, dots);
 }
 
 /* ============================================================
-   [4] AUTH — LOGIN-SCREEN
+   [4] LOGIN
    ============================================================ */
-function LoginScreen({ onLogin }){
-  const [email,setEmail]=useState("");
-  const [pw,setPw]=useState("");
-  const [err,setErr]=useState("");
-  const [busy,setBusy]=useState(false);
-
-  async function submit(){
+function LoginScreen(p){
+  var s=useState(""),email=s[0],setEmail=s[1];
+  var s2=useState(""),pw=s2[0],setPw=s2[1];
+  var s3=useState(""),err=s3[0],setErr=s3[1];
+  var s4=useState(false),busy=s4[0],setBusy=s4[1];
+  function submit(){
     setErr(""); setBusy(true);
-    try{ const u = await api.login(email,pw); onLogin(u); }
-    catch(e){ setErr(e.message); }
-    finally{ setBusy(false); }
+    api.login(email,pw).then(function(u){p.onLogin(u);}).catch(function(e){setErr(e.message);}).then(function(){setBusy(false);});
   }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm fade-in">
-        <div className="text-center mb-10">
-          <div className="font-display text-6xl tracking-tight">旅</div>
-          <h1 className="font-display text-4xl mt-2">Tabi</h1>
-          <p className="text-[var(--muted)] text-sm mt-1">Euer Reiseplaner für Japan</p>
-        </div>
-        <div className="space-y-3">
-          <input className={inputCls} type="email" placeholder="E-Mail" value={email}
-                 onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} />
-          <input className={inputCls} type="password" placeholder="Passwort" value={pw}
-                 onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} />
-          {err && <p className="text-[var(--vermilion)] text-sm">{err}</p>}
-          <button onClick={submit} disabled={busy}
-                  className="w-full py-3 bg-[var(--ai)] text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50">
-            {busy ? "Anmelden…" : "Anmelden"}
-          </button>
-        </div>
-        <p className="text-center text-xs text-[var(--muted)] mt-6">
-          Geschützter Bereich · später über Supabase abgesichert
-        </p>
-      </div>
-    </div>
+  function onKey(e){ if(e.key==="Enter") submit(); }
+  return h("div",{className:"min-h-screen flex items-center justify-center p-6"},
+    h("div",{className:"w-full max-w-sm fade-in"},
+      h("div",{className:"text-center mb-4"},
+        h("div",{className:"font-display text-6xl"},"旅"),
+        h("h1",{className:"font-display text-4xl mt-1"},"Tabi"),
+        h("p",{className:"text-muted text-sm mt-1"},"Euer Reiseplaner für Japan")),
+      h("div",{className:"space-y-3",style:{marginTop:"1.5rem"}},
+        h("input",{className:"inp",type:"email",placeholder:"E-Mail",value:email,onChange:function(e){setEmail(e.target.value);},onKeyDown:onKey}),
+        h("input",{className:"inp",type:"password",placeholder:"Passwort",value:pw,onChange:function(e){setPw(e.target.value);},onKeyDown:onKey}),
+        err?h("p",{className:"text-vermilion text-sm"},err):null,
+        h("button",{className:"btn-primary w-full py-3",onClick:submit,disabled:busy,style:{opacity:busy?.5:1}}, busy?"Anmelden…":"Anmelden")),
+      h("p",{className:"text-center text-xs text-muted",style:{marginTop:"1.5rem"}},"Geschützter Bereich · später über Supabase abgesichert")
+    )
   );
 }
 
 /* ============================================================
    [5] COUNTDOWN
    ============================================================ */
-function Countdown({ target }){
-  const [now,setNow]=useState(Date.now());
-  useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(t); },[]);
-  const diff = Math.max(0, new Date(target).getTime()-now);
-  const d=Math.floor(diff/86400000), h=Math.floor(diff/3600000)%24, m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
-  const Unit=({v,l})=>(
-    <div className="text-center">
-      <div className="font-mono text-3xl sm:text-4xl tabular-nums">{String(v).padStart(2,"0")}</div>
-      <div className="text-[10px] uppercase tracking-widest text-[var(--muted)] mt-1">{l}</div>
-    </div>
-  );
-  return (
-    <div className="flex gap-4 sm:gap-8 justify-center">
-      <Unit v={d} l="Tage"/><Unit v={h} l="Std"/><Unit v={m} l="Min"/><Unit v={s} l="Sek"/>
-    </div>
-  );
+function Countdown(p){
+  var s=useState(Date.now()),now=s[0],setNow=s[1];
+  useEffect(function(){var t=setInterval(function(){setNow(Date.now());},1000);return function(){clearInterval(t);};},[]);
+  var diff=Math.max(0,new Date(p.target).getTime()-now);
+  var d=Math.floor(diff/86400000),hh=Math.floor(diff/3600000)%24,m=Math.floor(diff/60000)%60,sec=Math.floor(diff/1000)%60;
+  function Unit(v,l){
+    return h("div",{className:"text-center"},
+      h("div",{className:"font-mono text-4xl sm:text-4xl tabular-nums"},String(v).padStart(2,"0")),
+      h("div",{className:"text-xs uppercase tracking-widest text-muted mt-1"},l));
+  }
+  return h("div",{className:"flex gap-4 sm:gap-8 justify-center"}, Unit(d,"Tage"),Unit(hh,"Std"),Unit(m,"Min"),Unit(sec,"Sek"));
 }
 
 /* ============================================================
    [6] VIEWS
    ============================================================ */
-
-// --- Dashboard ---
-function Dashboard({ trip, onShare }){
-  const [aiTip,setAiTip]=useState("");
-  const [loadingTip,setLoadingTip]=useState(false);
-
-  async function loadTip(){
-    setLoadingTip(true);
-    const t = await api.aiSuggest("Gib mir EINEN kurzen, originellen Insider-Tipp (max 2 Sätze, auf Deutsch) für eine Japanreise im Oktober. Kein Smalltalk, nur den Tipp.");
-    setAiTip(t); setLoadingTip(false);
-  }
-  useEffect(()=>{ loadTip(); },[]);
-
-  return (
-    <div className="fade-in space-y-6">
-      <div className="rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-[var(--muted)]">Nächste Reise</p>
-            <h2 className="font-display text-5xl sm:text-6xl mt-1">{trip.title}</h2>
-            <p className="text-[var(--muted)] mt-1">{trip.subtitle}</p>
-          </div>
-          <button onClick={onShare} className="flex items-center gap-1.5 text-sm text-[var(--ai)] hover:underline shrink-0">
-            <Icon name="share-2"/> Teilen
-          </button>
-        </div>
-        <div className="my-8"><Countdown target={trip.start}/></div>
-        <div className="text-center text-sm text-[var(--muted)]">
-          {new Date(trip.start).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"})}
-          {" — "}
-          {new Date(trip.end).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"})}
-        </div>
-      </div>
-
-      {/* Stilisierte interaktive Karte (Pins). Tippen öffnet Google Maps. */}
-      <div className="rounded-2xl border border-[var(--line)] overflow-hidden">
-        <div className="px-5 py-3 border-b border-[var(--line)] flex items-center gap-2 bg-white">
-          <Icon name="map" className="text-[var(--ai)]"/> <span className="font-medium">Reisekarte</span>
-        </div>
-        <div className="map-grid relative h-56">
-          {[{n:"Tokio",x:"70%",y:"55%"},{n:"Kyoto",x:"42%",y:"62%"},{n:"Kanazawa",x:"38%",y:"40%"}].map((p,i)=>(
-            <a key={i} href={`https://www.google.com/maps/search/${encodeURIComponent(p.n+" Japan")}`} target="_blank"
-               className="absolute -translate-x-1/2 -translate-y-1/2 group" style={{left:p.x,top:p.y}}>
-              <span className="block text-[var(--vermilion)]"><Icon name="map-pin" size="1.6rem"/></span>
-              <span className="absolute left-1/2 -translate-x-1/2 mt-1 text-xs font-medium bg-white/90 px-1.5 py-0.5 rounded whitespace-nowrap">{p.n}</span>
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* Automatische Ergänzung (Claude) */}
-      <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-        <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-2 font-medium"><Icon name="wand-sparkles" className="text-[var(--ai)]"/> Tipp des Tages</span>
-          <button onClick={loadTip} className="text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="refresh-cw"/></button>
-        </div>
-        <p className="text-sm text-[var(--muted)] leading-relaxed">{loadingTip ? "Lädt…" : aiTip}</p>
-      </div>
-    </div>
+function Dashboard(p){
+  var s=useState(""),tip=s[0],setTip=s[1];
+  var s2=useState(true),loading=s2[0],setLoading=s2[1];
+  function load(){ setLoading(true);
+    api.aiSuggest("Gib mir EINEN kurzen, originellen Insider-Tipp (max 2 Sätze, Deutsch) für eine Japanreise im Oktober. Nur den Tipp.")
+      .then(function(t){setTip(t);setLoading(false);}); }
+  useEffect(function(){load();},[]);
+  var pins=[{n:"Tokio",x:"70%",y:"55%"},{n:"Kyoto",x:"42%",y:"62%"},{n:"Kanazawa",x:"38%",y:"40%"}];
+  return h("div",{className:"fade-in space-y-6"},
+    h("div",{className:"rounded-2xl border bg-white p-6 sm:p-8"},
+      h("div",{className:"flex items-start justify-between"},
+        h("div",null,
+          h("p",{className:"text-xs uppercase tracking-widest text-muted"},"Nächste Reise"),
+          h("h2",{className:"font-display text-5xl sm:text-6xl mt-1"},p.trip.title),
+          h("p",{className:"text-muted mt-1"},p.trip.subtitle)),
+        h("button",{className:"flex items-center gap-1 text-sm text-ai shrink-0",onClick:p.onShare}, h(Icon,{name:"share-2"})," Teilen")),
+      h("div",{className:"my-8"}, h(Countdown,{target:p.trip.start})),
+      h("div",{className:"text-center text-sm text-muted"},
+        new Date(p.trip.start).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"})+" — "+
+        new Date(p.trip.end).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"}))),
+    h("div",{className:"rounded-2xl border overflow-hidden"},
+      h("div",{className:"px-5 py-3 border-b flex items-center gap-2 bg-white"}, h(Icon,{name:"map",className:"text-ai"}), h("span",{className:"font-medium"},"Reisekarte")),
+      h("div",{className:"map-grid relative h-56"},
+        pins.map(function(pin,i){
+          return h("a",{key:i,href:"https://www.google.com/maps/search/"+encodeURIComponent(pin.n+" Japan"),target:"_blank",
+            className:"absolute",style:{left:pin.x,top:pin.y,transform:"translate(-50%,-50%)",textAlign:"center"}},
+            h("span",{className:"text-vermilion",style:{display:"block"}}, h(Icon,{name:"map-pin",size:"1.6rem"})),
+            h("span",{style:{fontSize:".75rem",fontWeight:500,background:"rgba(255,255,255,.9)",padding:"1px 6px",borderRadius:"4px",whiteSpace:"nowrap"}},pin.n));
+        }))),
+    h("div",{className:"rounded-2xl border bg-white p-5"},
+      h("div",{className:"flex items-center justify-between mb-2"},
+        h("span",{className:"flex items-center gap-2 font-medium"}, h(Icon,{name:"sparkles",className:"text-ai"})," Tipp des Tages"),
+        h("button",{className:"text-muted",onClick:load}, h(Icon,{name:"refresh-cw"}))),
+      h("p",{className:"text-sm text-muted leading-relaxed"}, loading?"Lädt…":tip))
   );
 }
 
-// --- Timeline ---
-function Timeline({ trip }){
-  const [open,setOpen]=useState(trip.days[0]?.day);
-  return (
-    <div className="fade-in space-y-3">
-      <h2 className="font-display text-3xl mb-2">Route</h2>
-      {trip.days.map(d=>(
-        <div key={d.day} className="rounded-xl border border-[var(--line)] bg-white overflow-hidden">
-          <button onClick={()=>setOpen(open===d.day?null:d.day)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left">
-            <span className="flex items-center gap-4">
-              <span className="font-mono text-xs text-[var(--muted)] w-12">Tag {d.day}</span>
-              <span className="font-medium">{d.city}</span>
-              <span className="text-sm text-[var(--muted)]">{d.date}</span>
-            </span>
-            <Icon name={open===d.day?"chevron-up":"chevron-down"} className="text-[var(--muted)]"/>
-          </button>
-          {open===d.day && (
-            <div className="px-5 pb-4 space-y-3 border-t border-[var(--line)] pt-3 fade-in">
-              {d.items.map((it,i)=>(
-                <div key={i} className="flex gap-3">
-                  <span className="font-mono text-xs text-[var(--ai)] w-12 shrink-0 pt-0.5">{it.time}</span>
-                  <span className="text-[var(--ai)] pt-0.5"><Icon name={it.icon}/></span>
-                  <div>
-                    <p className="font-medium text-sm">{it.title}</p>
-                    <p className="text-xs text-[var(--muted)]">{it.note}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
+function Timeline(p){
+  var s=useState(p.trip.days[0]?p.trip.days[0].day:null),open=s[0],setOpen=s[1];
+  return h("div",{className:"fade-in space-y-3"},
+    h("h2",{className:"font-display text-3xl mb-2"},"Route"),
+    p.trip.days.map(function(d){
+      return h("div",{key:d.day,className:"rounded-xl border bg-white overflow-hidden"},
+        h("button",{className:"w-full flex items-center justify-between px-5 py-4 text-left",onClick:function(){setOpen(open===d.day?null:d.day);}},
+          h("span",{className:"flex items-center gap-4"},
+            h("span",{className:"font-mono text-xs text-muted",style:{width:"3rem"}},"Tag "+d.day),
+            h("span",{className:"font-medium"},d.city),
+            h("span",{className:"text-sm text-muted"},d.date)),
+          h(Icon,{name:open===d.day?"chevron-up":"chevron-down",className:"text-muted"})),
+        open===d.day?h("div",{className:"px-5 border-t fade-in",style:{paddingBottom:"1rem",paddingTop:".75rem"}},
+          d.items.map(function(it,i){
+            return h("div",{key:i,className:"flex gap-3",style:{marginTop:i?".75rem":0}},
+              h("span",{className:"font-mono text-xs text-ai shrink-0",style:{width:"3rem",paddingTop:"2px"}},it.time),
+              h("span",{className:"text-ai",style:{paddingTop:"2px"}}, h(Icon,{name:it.icon})),
+              h("div",null, h("p",{className:"font-medium text-sm"},it.title), h("p",{className:"text-xs text-muted"},it.note)));
+          })):null
+      );
+    })
   );
 }
 
-// --- Restaurants ---
 function Restaurants(){
-  const [list,setList]=useState([]);
-  const [filter,setFilter]=useState("Alle");
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState({ name:"",city:"",guide:"Michelin",award:"1 Stern",cuisine:"",status:"Wunschliste",confirmedAt:"",followUp:"",cancelBy:"",closed:"",deposit:false,note:"" });
-
-  useEffect(()=>{ api.fetchRestaurants().then(setList); },[]);
-  function persist(next){ setList(next); api.saveRestaurants(next); }
-
-  const awards = useMemo(()=>["Alle", ...new Set(list.map(r=>r.award))],[list]);
-  const shown = filter==="Alle" ? list : list.filter(r=>r.award===filter);
-
-  function add(){
-    if(!form.name) return;
-    persist([...list, { ...form, id:Date.now() }]);
-    setModal(false);
-    setForm({ name:"",city:"",guide:"Michelin",award:"1 Stern",cuisine:"",status:"Wunschliste",confirmedAt:"",followUp:"",cancelBy:"",closed:"",deposit:false,note:"" });
-  }
-  function statusKey(s){ return STATUS[s] || STATUS["Wunschliste"]; }
-
-  return (
-    <div className="fade-in">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-display text-3xl">Restaurants</h2>
-        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
-        {awards.map(a=>(
-          <button key={a} onClick={()=>setFilter(a)}
-            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap border ${filter===a?"bg-[var(--sumi)] text-white border-[var(--sumi)]":"border-[var(--line)] text-[var(--muted)]"}`}>{a}</button>
-        ))}
-      </div>
-      <div className="space-y-3">
-        {shown.map(r=>{
-          const sk = statusKey(r.status);
-          return (
-            <div key={r.id} className="rounded-xl border border-[var(--line)] bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium">{r.name}</h3>
-                    <Badge>{r.guide} · {r.award}</Badge>
-                  </div>
-                  <p className="text-sm text-[var(--muted)] mt-0.5">{r.city} · {r.cuisine}</p>
-                </div>
-                <Badge bg={sk.bg} color={sk.text}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{background:sk.dot}}></span>
-                  {r.status==="Bestätigt" && r.confirmedAt ? `Bestätigt · ${r.confirmedAt}` : r.status}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--muted)]">
-                {r.status==="Angefragt" && r.followUp && <span className="flex items-center gap-1"><Icon name="bell"/> Nachhaken: {r.followUp}</span>}
-                {r.deposit && <span className="flex items-center gap-1"><Icon name="credit-card"/> Kreditkarten-Garantie</span>}
-                {r.cancelBy && r.cancelBy!=="—" && <span className="flex items-center gap-1"><Icon name="calendar-x"/> Storno bis {r.cancelBy}</span>}
-                {r.closed && r.closed!=="—" && <span className="flex items-center gap-1"><Icon name="door-closed"/> Ruhetag {r.closed}</span>}
-              </div>
-              {r.note && <p className="text-xs text-[var(--muted)] mt-2 italic">{r.note}</p>}
-            </div>
-          );
-        })}
-      </div>
-
-      <Modal open={modal} onClose={()=>setModal(false)} title="Restaurant hinzufügen">
-        <Field label="Name"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Stadt"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
-          <Field label="Küche"><input className={inputCls} value={form.cuisine} onChange={e=>setForm({...form,cuisine:e.target.value})}/></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Guide">
-            <select className={inputCls} value={form.guide} onChange={e=>setForm({...form,guide:e.target.value,award:GUIDES[e.target.value][0]})}>
-              {Object.keys(GUIDES).map(g=><option key={g}>{g}</option>)}
-            </select>
-          </Field>
-          <Field label="Auszeichnung">
-            <select className={inputCls} value={form.award} onChange={e=>setForm({...form,award:e.target.value})}>
-              {GUIDES[form.guide].map(a=><option key={a}>{a}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Status">
-          <select className={inputCls} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
-            {Object.keys(STATUS).map(s=><option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        {form.status==="Bestätigt" && <Field label="Bestätigt am"><input className={inputCls} placeholder="z.B. 10.10. um 20:00" value={form.confirmedAt} onChange={e=>setForm({...form,confirmedAt:e.target.value})}/></Field>}
-        {form.status==="Angefragt" && <Field label="Nachhaken am"><input className={inputCls} placeholder="z.B. 15.09." value={form.followUp} onChange={e=>setForm({...form,followUp:e.target.value})}/></Field>}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Stornofrist"><input className={inputCls} value={form.cancelBy} onChange={e=>setForm({...form,cancelBy:e.target.value})}/></Field>
-          <Field label="Ruhetag"><input className={inputCls} placeholder="z.B. So/Mo" value={form.closed} onChange={e=>setForm({...form,closed:e.target.value})}/></Field>
-        </div>
-        <label className="flex items-center gap-2 text-sm mb-3"><input type="checkbox" checked={form.deposit} onChange={e=>setForm({...form,deposit:e.target.checked})}/> Kreditkarten-Garantie / Anzahlung nötig</label>
-        <Field label="Notiz"><textarea className={inputCls} rows="2" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></Field>
-        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
-      </Modal>
-    </div>
+  var s=useState([]),list=s[0],setList=s[1];
+  var s2=useState("Alle"),filter=s2[0],setFilter=s2[1];
+  var s3=useState(false),modal=s3[0],setModal=s3[1];
+  var blank={name:"",city:"",guide:"Michelin",award:"1 Stern",cuisine:"",status:"Wunschliste",confirmedAt:"",followUp:"",cancelBy:"",closed:"",deposit:false,note:""};
+  var s4=useState(blank),form=s4[0],setForm=s4[1];
+  useEffect(function(){api.fetchRestaurants().then(setList);},[]);
+  function persist(n){setList(n);api.saveRestaurants(n);}
+  var awards=["Alle"]; list.forEach(function(r){if(awards.indexOf(r.award)<0)awards.push(r.award);});
+  var shown=filter==="Alle"?list:list.filter(function(r){return r.award===filter;});
+  function upd(k,v){var o={};o[k]=v;setForm(Object.assign({},form,o));}
+  function add(){ if(!form.name)return; persist(list.concat([Object.assign({},form,{id:Date.now()})])); setModal(false); setForm(blank); }
+  function sk(st){return STATUS[st]||STATUS["Wunschliste"];}
+  return h("div",{className:"fade-in"},
+    h("div",{className:"flex items-center justify-between mb-3"},
+      h("h2",{className:"font-display text-3xl"},"Restaurants"),
+      h("button",{className:"btn-primary flex items-center gap-1 px-3 py-2 text-sm",onClick:function(){setModal(true);}}, h(Icon,{name:"plus"})," Neu")),
+    h("div",{className:"flex gap-2 overflow-x-auto mb-4",style:{paddingBottom:".5rem"}},
+      awards.map(function(a){return h("button",{key:a,onClick:function(){setFilter(a);},
+        className:"rounded-full text-sm whitespace-nowrap px-3 py-1",
+        style:{border:"1px solid "+(filter===a?"var(--sumi)":"var(--line)"),background:filter===a?"var(--sumi)":"transparent",color:filter===a?"#fff":"var(--muted)"}},a);})),
+    h("div",{className:"space-y-3"},
+      shown.map(function(r){var k=sk(r.status);
+        return h("div",{key:r.id,className:"rounded-xl border bg-white p-4"},
+          h("div",{className:"flex items-start justify-between gap-3"},
+            h("div",null,
+              h("div",{className:"flex items-center gap-2 flex-wrap"},
+                h("h3",{className:"font-medium"},r.name), h(Badge,null,r.guide+" · "+r.award)),
+              h("p",{className:"text-sm text-muted mt-1"},r.city+" · "+r.cuisine)),
+            h(Badge,{bg:k.bg,color:k.text},
+              h("span",{style:{width:6,height:6,borderRadius:9999,background:k.dot,display:"inline-block"}}),
+              (r.status==="Bestätigt"&&r.confirmedAt)?("Bestätigt · "+r.confirmedAt):r.status)),
+          h("div",{className:"flex flex-wrap gap-3 mt-3 text-xs text-muted"},
+            (r.status==="Angefragt"&&r.followUp)?h("span",{className:"flex items-center gap-1"},h(Icon,{name:"bell"})," Nachhaken: "+r.followUp):null,
+            r.deposit?h("span",{className:"flex items-center gap-1"},h(Icon,{name:"credit-card"})," Kreditkarten-Garantie"):null,
+            (r.cancelBy&&r.cancelBy!=="—")?h("span",{className:"flex items-center gap-1"},h(Icon,{name:"calendar-x"})," Storno bis "+r.cancelBy):null,
+            (r.closed&&r.closed!=="—")?h("span",{className:"flex items-center gap-1"},h(Icon,{name:"door-closed"})," Ruhetag "+r.closed):null),
+          r.note?h("p",{className:"text-xs text-muted mt-2 italic"},r.note):null
+        );
+      })),
+    h(Modal,{open:modal,onClose:function(){setModal(false);},title:"Restaurant hinzufügen"},
+      h(Field,{label:"Name"},h("input",{className:"inp",value:form.name,onChange:function(e){upd("name",e.target.value);}})),
+      h("div",{className:"grid grid-2 gap-3"},
+        h(Field,{label:"Stadt"},h("input",{className:"inp",value:form.city,onChange:function(e){upd("city",e.target.value);}})),
+        h(Field,{label:"Küche"},h("input",{className:"inp",value:form.cuisine,onChange:function(e){upd("cuisine",e.target.value);}}))),
+      h("div",{className:"grid grid-2 gap-3"},
+        h(Field,{label:"Guide"},h("select",{className:"inp",value:form.guide,onChange:function(e){setForm(Object.assign({},form,{guide:e.target.value,award:GUIDES[e.target.value][0]}));}},
+          Object.keys(GUIDES).map(function(g){return h("option",{key:g},g);}))),
+        h(Field,{label:"Auszeichnung"},h("select",{className:"inp",value:form.award,onChange:function(e){upd("award",e.target.value);}},
+          GUIDES[form.guide].map(function(a){return h("option",{key:a},a);})))),
+      h(Field,{label:"Status"},h("select",{className:"inp",value:form.status,onChange:function(e){upd("status",e.target.value);}},
+        Object.keys(STATUS).map(function(st){return h("option",{key:st},st);}))),
+      form.status==="Bestätigt"?h(Field,{label:"Bestätigt am"},h("input",{className:"inp",placeholder:"z.B. 10.10. um 20:00",value:form.confirmedAt,onChange:function(e){upd("confirmedAt",e.target.value);}})):null,
+      form.status==="Angefragt"?h(Field,{label:"Nachhaken am"},h("input",{className:"inp",placeholder:"z.B. 15.09.",value:form.followUp,onChange:function(e){upd("followUp",e.target.value);}})):null,
+      h("div",{className:"grid grid-2 gap-3"},
+        h(Field,{label:"Stornofrist"},h("input",{className:"inp",value:form.cancelBy,onChange:function(e){upd("cancelBy",e.target.value);}})),
+        h(Field,{label:"Ruhetag"},h("input",{className:"inp",placeholder:"z.B. So/Mo",value:form.closed,onChange:function(e){upd("closed",e.target.value);}}))),
+      h("label",{className:"flex items-center gap-2 text-sm mb-3"},
+        h("input",{type:"checkbox",checked:form.deposit,onChange:function(e){upd("deposit",e.target.checked);}})," Kreditkarten-Garantie / Anzahlung nötig"),
+      h(Field,{label:"Notiz"},h("textarea",{className:"inp",rows:2,value:form.note,onChange:function(e){upd("note",e.target.value);}})),
+      h("button",{className:"btn-primary w-full py-3",onClick:add},"Speichern")
+    )
   );
 }
 
-// --- Spots / Entdecker ---
 function Spots(){
-  const [list,setList]=useState([]);
-  const [tag,setTag]=useState("Alle");
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState({ name:"",city:"",secret:3,tags:[],note:"",maps:"",hours:"" });
-  const ALL_TAGS=["Vintage","Local Crafts","Lost Places","Aussichtspunkt"];
-
-  useEffect(()=>{ api.fetchSpots().then(setList); },[]);
-  function persist(next){ setList(next); api.saveSpots(next); }
-  const tags=["Alle",...ALL_TAGS];
-  const shown = tag==="Alle" ? list : list.filter(s=>s.tags.includes(tag));
-
-  function toggleTag(t){ setForm(f=>({...f, tags: f.tags.includes(t)?f.tags.filter(x=>x!==t):[...f.tags,t]})); }
-  function add(){
-    if(!form.name) return;
-    persist([...list, {...form, id:Date.now()}]);
-    setModal(false);
-    setForm({ name:"",city:"",secret:3,tags:[],note:"",maps:"",hours:"" });
-  }
-
-  return (
-    <div className="fade-in">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-display text-3xl">Entdecken</h2>
-        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
-        {tags.map(t=>(
-          <button key={t} onClick={()=>setTag(t)}
-            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap border ${tag===t?"bg-[var(--sumi)] text-white border-[var(--sumi)]":"border-[var(--line)] text-[var(--muted)]"}`}>{t}</button>
-        ))}
-      </div>
-      <div className="grid sm:grid-cols-2 gap-3">
-        {shown.map(s=>(
-          <div key={s.id} className="rounded-xl border border-[var(--line)] bg-white p-4">
-            <div className="flex items-start justify-between">
-              <h3 className="font-medium">{s.name}</h3>
-              <SecretScale value={s.secret}/>
-            </div>
-            <p className="text-sm text-[var(--muted)]">{s.city}{s.hours?` · ${s.hours}`:""}</p>
-            <p className="text-sm mt-2">{s.note}</p>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {s.tags.map(t=><Badge key={t} bg="bg-[var(--paper)]" color="text-[var(--ai)]">{t}</Badge>)}
-            </div>
-            {s.maps && <a href={`https://www.google.com/maps/search/${encodeURIComponent(s.maps)}`} target="_blank"
-               className="inline-flex items-center gap-1 text-xs text-[var(--ai)] mt-3 hover:underline"><Icon name="map-pin"/> Auf Karte öffnen</a>}
-          </div>
-        ))}
-      </div>
-
-      <Modal open={modal} onClose={()=>setModal(false)} title="Geheimtipp hinzufügen">
-        <Field label="Name"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Stadt"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
-          <Field label="Öffnungszeiten"><input className={inputCls} value={form.hours} onChange={e=>setForm({...form,hours:e.target.value})}/></Field>
-        </div>
-        <Field label={`Geheimtipp-Skala: ${form.secret}/5`}>
-          <input type="range" min="1" max="5" value={form.secret} onChange={e=>setForm({...form,secret:+e.target.value})} className="w-full accent-[var(--vermilion)]"/>
-        </Field>
-        <Field label="Tags">
-          <div className="flex flex-wrap gap-2">
-            {ALL_TAGS.map(t=>(
-              <button key={t} onClick={()=>toggleTag(t)}
-                className={`px-3 py-1 rounded-full text-sm border ${form.tags.includes(t)?"bg-[var(--ai)] text-white border-[var(--ai)]":"border-[var(--line)] text-[var(--muted)]"}`}>{t}</button>
-            ))}
-          </div>
-        </Field>
-        <Field label="Google-Maps-Suchbegriff"><input className={inputCls} value={form.maps} onChange={e=>setForm({...form,maps:e.target.value})}/></Field>
-        <Field label="Notiz"><textarea className={inputCls} rows="2" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></Field>
-        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
-      </Modal>
-    </div>
+  var ALL=["Vintage","Local Crafts","Lost Places","Aussichtspunkt"];
+  var s=useState([]),list=s[0],setList=s[1];
+  var s2=useState("Alle"),tag=s2[0],setTag=s2[1];
+  var s3=useState(false),modal=s3[0],setModal=s3[1];
+  var blank={name:"",city:"",secret:3,tags:[],note:"",maps:"",hours:""};
+  var s4=useState(blank),form=s4[0],setForm=s4[1];
+  useEffect(function(){api.fetchSpots().then(setList);},[]);
+  function persist(n){setList(n);api.saveSpots(n);}
+  function upd(k,v){var o={};o[k]=v;setForm(Object.assign({},form,o));}
+  function toggleTag(t){var has=form.tags.indexOf(t)>=0; upd("tags", has?form.tags.filter(function(x){return x!==t;}):form.tags.concat([t]));}
+  function add(){if(!form.name)return; persist(list.concat([Object.assign({},form,{id:Date.now()})])); setModal(false); setForm(blank);}
+  var tags=["Alle"].concat(ALL);
+  var shown=tag==="Alle"?list:list.filter(function(sp){return sp.tags.indexOf(tag)>=0;});
+  return h("div",{className:"fade-in"},
+    h("div",{className:"flex items-center justify-between mb-3"},
+      h("h2",{className:"font-display text-3xl"},"Entdecken"),
+      h("button",{className:"btn-primary flex items-center gap-1 px-3 py-2 text-sm",onClick:function(){setModal(true);}}, h(Icon,{name:"plus"})," Neu")),
+    h("div",{className:"flex gap-2 overflow-x-auto mb-4",style:{paddingBottom:".5rem"}},
+      tags.map(function(t){return h("button",{key:t,onClick:function(){setTag(t);},className:"rounded-full text-sm whitespace-nowrap px-3 py-1",
+        style:{border:"1px solid "+(tag===t?"var(--sumi)":"var(--line)"),background:tag===t?"var(--sumi)":"transparent",color:tag===t?"#fff":"var(--muted)"}},t);})),
+    h("div",{className:"grid sm:grid-cols-2 gap-3"},
+      shown.map(function(sp){
+        return h("div",{key:sp.id,className:"rounded-xl border bg-white p-4"},
+          h("div",{className:"flex items-start justify-between"}, h("h3",{className:"font-medium"},sp.name), h(SecretScale,{value:sp.secret})),
+          h("p",{className:"text-sm text-muted"},sp.city+(sp.hours?" · "+sp.hours:"")),
+          h("p",{className:"text-sm mt-2"},sp.note),
+          h("div",{className:"flex flex-wrap gap-1 mt-3"}, sp.tags.map(function(t){return h(Badge,{key:t,bg:"#F2F0EA",color:"var(--ai)"},t);})),
+          sp.maps?h("a",{href:"https://www.google.com/maps/search/"+encodeURIComponent(sp.maps),target:"_blank",className:"inline-flex items-center gap-1 text-xs text-ai mt-3"},h(Icon,{name:"map-pin"})," Auf Karte öffnen"):null
+        );
+      })),
+    h(Modal,{open:modal,onClose:function(){setModal(false);},title:"Geheimtipp hinzufügen"},
+      h(Field,{label:"Name"},h("input",{className:"inp",value:form.name,onChange:function(e){upd("name",e.target.value);}})),
+      h("div",{className:"grid grid-2 gap-3"},
+        h(Field,{label:"Stadt"},h("input",{className:"inp",value:form.city,onChange:function(e){upd("city",e.target.value);}})),
+        h(Field,{label:"Öffnungszeiten"},h("input",{className:"inp",value:form.hours,onChange:function(e){upd("hours",e.target.value);}}))),
+      h(Field,{label:"Geheimtipp-Skala: "+form.secret+"/5"},
+        h("input",{type:"range",min:1,max:5,value:form.secret,onChange:function(e){upd("secret",+e.target.value);},style:{width:"100%",accentColor:"var(--vermilion)"}})),
+      h(Field,{label:"Tags"},
+        h("div",{className:"flex flex-wrap gap-2"}, ALL.map(function(t){var on=form.tags.indexOf(t)>=0;
+          return h("button",{key:t,onClick:function(){toggleTag(t);},className:"rounded-full text-sm px-3 py-1",
+            style:{border:"1px solid "+(on?"var(--ai)":"var(--line)"),background:on?"var(--ai)":"transparent",color:on?"#fff":"var(--muted)"}},t);}))),
+      h(Field,{label:"Google-Maps-Suchbegriff"},h("input",{className:"inp",value:form.maps,onChange:function(e){upd("maps",e.target.value);}})),
+      h(Field,{label:"Notiz"},h("textarea",{className:"inp",rows:2,value:form.note,onChange:function(e){upd("note",e.target.value);}})),
+      h("button",{className:"btn-primary w-full py-3",onClick:add},"Speichern")
+    )
   );
 }
 
-// --- Logistik (Unterkunft / Transport / Veranstaltung) ---
 function Logistics(){
-  const [list,setList]=useState([]);
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState({ type:"Unterkunft",name:"",city:"",from:"",to:"",detail:"" });
-  const ICONS={ "Unterkunft":"bed-double","Transport":"train-front","Veranstaltung":"ticket" };
-
-  useEffect(()=>{ api.fetchStays().then(setList); },[]);
-  function persist(next){ setList(next); api.saveStays(next); }
-  function add(){
-    if(!form.name) return;
-    persist([...list, {...form, id:Date.now(), icon:ICONS[form.type]}]);
-    setModal(false);
-    setForm({ type:"Unterkunft",name:"",city:"",from:"",to:"",detail:"" });
-  }
-
-  return (
-    <div className="fade-in">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-display text-3xl">Logistik</h2>
-        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
-      </div>
-      <div className="space-y-3">
-        {list.map(s=>(
-          <div key={s.id} className="rounded-xl border border-[var(--line)] bg-white p-4 flex gap-4">
-            <span className="text-[var(--ai)] mt-0.5"><Icon name={s.icon} size="1.3rem"/></span>
-            <div className="flex-1">
-              <div className="flex items-center gap-2"><h3 className="font-medium">{s.name}</h3><Badge>{s.type}</Badge></div>
-              <p className="text-sm text-[var(--muted)]">{s.city}</p>
-              <p className="text-xs text-[var(--muted)] mt-1">{s.from} → {s.to}{s.detail?` · ${s.detail}`:""}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Modal open={modal} onClose={()=>setModal(false)} title="Eintrag hinzufügen">
-        <Field label="Typ">
-          <select className={inputCls} value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
-            <option>Unterkunft</option><option>Transport</option><option>Veranstaltung</option>
-          </select>
-        </Field>
-        <Field label="Name / Bezeichnung"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
-        <Field label="Ort / Strecke"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Von"><input className={inputCls} value={form.from} onChange={e=>setForm({...form,from:e.target.value})}/></Field>
-          <Field label="Bis"><input className={inputCls} value={form.to} onChange={e=>setForm({...form,to:e.target.value})}/></Field>
-        </div>
-        <Field label="Detail"><input className={inputCls} value={form.detail} onChange={e=>setForm({...form,detail:e.target.value})}/></Field>
-        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
-      </Modal>
-    </div>
+  var ICONS={"Unterkunft":"bed-double","Transport":"train-front","Veranstaltung":"ticket"};
+  var s=useState([]),list=s[0],setList=s[1];
+  var s2=useState(false),modal=s2[0],setModal=s2[1];
+  var blank={type:"Unterkunft",name:"",city:"",from:"",to:"",detail:""};
+  var s3=useState(blank),form=s3[0],setForm=s3[1];
+  useEffect(function(){api.fetchStays().then(setList);},[]);
+  function persist(n){setList(n);api.saveStays(n);}
+  function upd(k,v){var o={};o[k]=v;setForm(Object.assign({},form,o));}
+  function add(){if(!form.name)return; persist(list.concat([Object.assign({},form,{id:Date.now(),icon:ICONS[form.type]})])); setModal(false); setForm(blank);}
+  return h("div",{className:"fade-in"},
+    h("div",{className:"flex items-center justify-between mb-3"},
+      h("h2",{className:"font-display text-3xl"},"Logistik"),
+      h("button",{className:"btn-primary flex items-center gap-1 px-3 py-2 text-sm",onClick:function(){setModal(true);}}, h(Icon,{name:"plus"})," Neu")),
+    h("div",{className:"space-y-3"},
+      list.map(function(st){
+        return h("div",{key:st.id,className:"rounded-xl border bg-white p-4 flex gap-4"},
+          h("span",{className:"text-ai",style:{paddingTop:"2px"}}, h(Icon,{name:st.icon,size:"1.3rem"})),
+          h("div",{className:"flex-1"},
+            h("div",{className:"flex items-center gap-2"}, h("h3",{className:"font-medium"},st.name), h(Badge,null,st.type)),
+            h("p",{className:"text-sm text-muted"},st.city),
+            h("p",{className:"text-xs text-muted mt-1"},st.from+" → "+st.to+(st.detail?" · "+st.detail:""))));
+      })),
+    h(Modal,{open:modal,onClose:function(){setModal(false);},title:"Eintrag hinzufügen"},
+      h(Field,{label:"Typ"},h("select",{className:"inp",value:form.type,onChange:function(e){upd("type",e.target.value);}},
+        h("option",null,"Unterkunft"),h("option",null,"Transport"),h("option",null,"Veranstaltung"))),
+      h(Field,{label:"Name / Bezeichnung"},h("input",{className:"inp",value:form.name,onChange:function(e){upd("name",e.target.value);}})),
+      h(Field,{label:"Ort / Strecke"},h("input",{className:"inp",value:form.city,onChange:function(e){upd("city",e.target.value);}})),
+      h("div",{className:"grid grid-2 gap-3"},
+        h(Field,{label:"Von"},h("input",{className:"inp",value:form.from,onChange:function(e){upd("from",e.target.value);}})),
+        h(Field,{label:"Bis"},h("input",{className:"inp",value:form.to,onChange:function(e){upd("to",e.target.value);}}))),
+      h(Field,{label:"Detail"},h("input",{className:"inp",value:form.detail,onChange:function(e){upd("detail",e.target.value);}})),
+      h("button",{className:"btn-primary w-full py-3",onClick:add},"Speichern")
+    )
   );
 }
 
-// --- Galerie (Fotos + Kommentare + Sprachnotiz-Platzhalter) ---
-function Gallery({ user }){
-  const [photos,setPhotos]=useState([]);
-  const [active,setActive]=useState(null);
-  const [text,setText]=useState("");
-  const [recording,setRecording]=useState(false);
-
-  useEffect(()=>{ api.fetchPhotos().then(setPhotos); },[]);
-  function persist(next){ setPhotos(next); api.savePhotos(next); }
-
-  function addComment(){
-    if(!text || active==null) return;
-    const next = photos.map(p=>p.id===active ? {...p, comments:[...p.comments,{by:user.name,text}]} : p);
-    persist(next); setText("");
+function Gallery(p){
+  var s=useState([]),photos=s[0],setPhotos=s[1];
+  var s2=useState(null),active=s2[0],setActive=s2[1];
+  var s3=useState(""),text=s3[0],setText=s3[1];
+  var s4=useState(false),rec=s4[0],setRec=s4[1];
+  useEffect(function(){api.fetchPhotos().then(setPhotos);},[]);
+  function persist(n){setPhotos(n);api.savePhotos(n);}
+  function addComment(){ if(!text||active==null)return;
+    persist(photos.map(function(ph){return ph.id===active?Object.assign({},ph,{comments:ph.comments.concat([{by:p.user.name,text:text}])}):ph;})); setText(""); }
+  function toggleVoice(){
+    if(rec){setRec(false);return;}
+    if(!navigator.mediaDevices){alert("Mikrofon nicht verfügbar.");return;}
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+      var r=new MediaRecorder(stream),chunks=[];
+      r.ondataavailable=function(e){chunks.push(e.data);};
+      r.onstop=function(){api.uploadVoiceNote(new Blob(chunks)); stream.getTracks().forEach(function(t){t.stop();});};
+      r.start(); setRec(true);
+      setTimeout(function(){if(r.state!=="inactive"){r.stop();setRec(false);}},5000);
+    }).catch(function(){alert("Mikrofonzugriff nicht möglich.");});
   }
-  // Sprachaufnahme: nimmt im Browser auf; Speichern braucht später Supabase Storage
-  async function toggleVoice(){
-    if(recording){ setRecording(false); return; }
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      const rec = new MediaRecorder(stream); const chunks=[];
-      rec.ondataavailable=e=>chunks.push(e.data);
-      rec.onstop=async()=>{ const blob=new Blob(chunks); await api.uploadVoiceNote(blob); stream.getTracks().forEach(t=>t.stop()); };
-      rec.start(); setRecording(true);
-      setTimeout(()=>{ if(rec.state!=="inactive"){ rec.stop(); setRecording(false); } },5000);
-    }catch(e){ alert("Mikrofonzugriff nicht möglich (im Browser auf GitHub Pages aktivierbar)."); }
-  }
-
-  const activePhoto = photos.find(p=>p.id===active);
-
-  return (
-    <div className="fade-in">
-      <h2 className="font-display text-3xl mb-3">Galerie</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {photos.map(p=>(
-          <button key={p.id} onClick={()=>setActive(p.id)} className="text-left group">
-            <div className="aspect-square rounded-xl flex items-end p-3" style={{background:`linear-gradient(135deg, ${p.color}, ${p.color}cc)`}}>
-              <span className="text-white text-sm font-medium drop-shadow">{p.caption}</span>
-            </div>
-            <p className="text-xs text-[var(--muted)] mt-1 flex items-center gap-1"><Icon name="message-circle"/> {p.comments.length} · {p.city}</p>
-          </button>
-        ))}
-      </div>
-
-      <Modal open={active!=null} onClose={()=>setActive(null)} title={activePhoto?.caption||""}>
-        {activePhoto && (
-          <div>
-            <div className="aspect-video rounded-xl mb-4" style={{background:`linear-gradient(135deg, ${activePhoto.color}, ${activePhoto.color}cc)`}}></div>
-            <p className="text-xs uppercase tracking-wider text-[var(--muted)] mb-2">Kommentare</p>
-            <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
-              {activePhoto.comments.length===0 && <p className="text-sm text-[var(--muted)]">Noch keine Kommentare.</p>}
-              {activePhoto.comments.map((c,i)=>(
-                <div key={i} className="text-sm"><span className="font-medium">{c.by}:</span> <span className="text-[var(--muted)]">{c.text}</span></div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input className={inputCls} placeholder="Kommentar schreiben…" value={text}
-                     onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addComment()}/>
-              <button onClick={toggleVoice} title="Sprachnotiz (5 Sek.)"
-                      className={`px-3 rounded-lg border ${recording?"bg-[var(--vermilion)] text-white border-[var(--vermilion)]":"border-[var(--line)] text-[var(--ai)]"}`}>
-                <Icon name={recording?"square":"mic"}/>
-              </button>
-              <button onClick={addComment} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="send"/></button>
-            </div>
-            <p className="text-[10px] text-[var(--muted)] mt-2">Sprachnotizen werden gespeichert, sobald Supabase Storage verbunden ist.</p>
-          </div>
-        )}
-      </Modal>
-    </div>
+  var ap=photos.filter(function(ph){return ph.id===active;})[0];
+  return h("div",{className:"fade-in"},
+    h("h2",{className:"font-display text-3xl mb-3"},"Galerie"),
+    h("div",{className:"grid grid-cols-2 sm:grid-cols-3 gap-3"},
+      photos.map(function(ph){
+        return h("button",{key:ph.id,onClick:function(){setActive(ph.id);},className:"text-left"},
+          h("div",{className:"aspect-square rounded-xl flex items-end p-3",style:{background:"linear-gradient(135deg,"+ph.color+","+ph.color+"cc)"}},
+            h("span",{className:"text-white text-sm font-medium"},ph.caption)),
+          h("p",{className:"text-xs text-muted mt-1 flex items-center gap-1"}, h(Icon,{name:"message-circle"})," "+ph.comments.length+" · "+ph.city));
+      })),
+    h(Modal,{open:active!=null,onClose:function(){setActive(null);},title:ap?ap.caption:""},
+      ap?h("div",null,
+        h("div",{className:"aspect-video rounded-xl mb-4",style:{background:"linear-gradient(135deg,"+ap.color+","+ap.color+"cc)"}}),
+        h("p",{className:"text-xs uppercase tracking-wider text-muted mb-2"},"Kommentare"),
+        h("div",{className:"space-y-2 mb-4",style:{maxHeight:"10rem",overflowY:"auto"}},
+          ap.comments.length===0?h("p",{className:"text-sm text-muted"},"Noch keine Kommentare."):null,
+          ap.comments.map(function(c,i){return h("div",{key:i,className:"text-sm"}, h("span",{className:"font-medium"},c.by+": "), h("span",{className:"text-muted"},c.text));})),
+        h("div",{className:"flex gap-2"},
+          h("input",{className:"inp",placeholder:"Kommentar schreiben…",value:text,onChange:function(e){setText(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addComment();}}),
+          h("button",{onClick:toggleVoice,title:"Sprachnotiz (5 Sek.)",className:"px-3 rounded-lg",
+            style:{border:"1px solid "+(rec?"var(--vermilion)":"var(--line)"),background:rec?"var(--vermilion)":"transparent",color:rec?"#fff":"var(--ai)"}}, h(Icon,{name:rec?"square":"mic"})),
+          h("button",{onClick:addComment,className:"btn-primary px-3"}, h(Icon,{name:"send"}))),
+        h("p",{className:"text-xs text-muted mt-2"},"Sprachnotizen werden gespeichert, sobald Supabase Storage verbunden ist.")
+      ):null
+    )
   );
 }
 
-// --- Packliste ---
 function Packing(){
-  const [list,setList]=useState([]);
-  const [text,setText]=useState("");
-  useEffect(()=>{ api.fetchPacking().then(setList); },[]);
-  function persist(next){ setList(next); api.savePacking(next); }
-  function toggle(id){ persist(list.map(i=>i.id===id?{...i,done:!i.done}:i)); }
-  function add(){ if(!text)return; persist([...list,{id:Date.now(),label:text,done:false}]); setText(""); }
-  function remove(id){ persist(list.filter(i=>i.id!==id)); }
-  const doneCount=list.filter(i=>i.done).length;
-
-  return (
-    <div className="fade-in">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="font-display text-3xl">Packliste</h2>
-        <span className="text-sm text-[var(--muted)] font-mono">{doneCount}/{list.length}</span>
-      </div>
-      <div className="flex gap-2 mb-4">
-        <input className={inputCls} placeholder="Etwas hinzufügen…" value={text}
-               onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/>
-        <button onClick={add} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="plus"/></button>
-      </div>
-      <div className="space-y-2">
-        {list.map(i=>(
-          <div key={i.id} className="flex items-center gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-2.5 group">
-            <button onClick={()=>toggle(i.id)} className={`w-5 h-5 rounded border flex items-center justify-center ${i.done?"bg-[var(--ai)] border-[var(--ai)] text-white":"border-[var(--line)]"}`}>
-              {i.done && <Icon name="check" size="0.8rem"/>}
-            </button>
-            <span className={`flex-1 text-sm ${i.done?"line-through text-[var(--muted)]":""}`}>{i.label}</span>
-            <button onClick={()=>remove(i.id)} className="text-[var(--muted)] opacity-0 group-hover:opacity-100"><Icon name="trash-2" size="1rem"/></button>
-          </div>
-        ))}
-      </div>
-    </div>
+  var s=useState([]),list=s[0],setList=s[1];
+  var s2=useState(""),text=s2[0],setText=s2[1];
+  useEffect(function(){api.fetchPacking().then(setList);},[]);
+  function persist(n){setList(n);api.savePacking(n);}
+  function toggle(id){persist(list.map(function(i){return i.id===id?Object.assign({},i,{done:!i.done}):i;}));}
+  function add(){if(!text)return; persist(list.concat([{id:Date.now(),label:text,done:false}])); setText("");}
+  function remove(id){persist(list.filter(function(i){return i.id!==id;}));}
+  var done=list.filter(function(i){return i.done;}).length;
+  return h("div",{className:"fade-in"},
+    h("div",{className:"flex items-baseline justify-between mb-3"},
+      h("h2",{className:"font-display text-3xl"},"Packliste"),
+      h("span",{className:"text-sm text-muted font-mono"},done+"/"+list.length)),
+    h("div",{className:"flex gap-2 mb-4"},
+      h("input",{className:"inp",placeholder:"Etwas hinzufügen…",value:text,onChange:function(e){setText(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")add();}}),
+      h("button",{className:"btn-primary px-3",onClick:add}, h(Icon,{name:"plus"}))),
+    h("div",{className:"space-y-2"},
+      list.map(function(i){
+        return h("div",{key:i.id,className:"flex items-center gap-3 rounded-lg border bg-white px-4 py-2"},
+          h("button",{onClick:function(){toggle(i.id);},style:{width:20,height:20,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",
+            border:"1px solid "+(i.done?"var(--ai)":"var(--line)"),background:i.done?"var(--ai)":"transparent",color:"#fff"}}, i.done?h(Icon,{name:"check",size:".8rem"}):null),
+          h("span",{className:"flex-1 text-sm",style:{textDecoration:i.done?"line-through":"none",color:i.done?"var(--muted)":"inherit"}},i.label),
+          h("button",{onClick:function(){remove(i.id);},className:"text-muted"}, h(Icon,{name:"trash-2",size:"1rem"})));
+      }))
   );
 }
 
 /* ============================================================
-   [7] APP-SHELL (Navigation + Auth-Gate)
+   [7] APP-SHELL
    ============================================================ */
-const TABS = [
-  { key:"dashboard", label:"Start",     icon:"home" },
-  { key:"route",     label:"Route",     icon:"route" },
-  { key:"food",      label:"Essen",     icon:"utensils" },
-  { key:"spots",     label:"Entdecken", icon:"compass" },
-  { key:"logistics", label:"Logistik",  icon:"luggage" },
-  { key:"gallery",   label:"Galerie",   icon:"image" },
-  { key:"packing",   label:"Packen",    icon:"list-checks" },
+var TABS=[
+  {key:"dashboard",label:"Start",icon:"home"},
+  {key:"route",label:"Route",icon:"route"},
+  {key:"food",label:"Essen",icon:"utensils"},
+  {key:"spots",label:"Entdecken",icon:"compass"},
+  {key:"logistics",label:"Logistik",icon:"luggage"},
+  {key:"gallery",label:"Galerie",icon:"image"},
+  {key:"packing",label:"Packen",icon:"list-checks"}
 ];
 
 function App(){
-  const [user,setUser]=useState(null);
-  const [ready,setReady]=useState(false);
-  const [tab,setTab]=useState("dashboard");
-  const [trip,setTrip]=useState(SEED.trip);
-  const [shareLink,setShareLink]=useState(null);
-
-  useEffect(()=>{ api.getSession().then(u=>{ setUser(u); setReady(true); }); },[]);
-  useEffect(()=>{ if(user) api.fetchTrip().then(setTrip); },[user]);
-
-  async function share(){ const l = await api.createShareLink(); setShareLink(l); }
-
-  if(!ready) return <div className="min-h-screen flex items-center justify-center text-[var(--muted)]">Lädt…</div>;
-  if(!user) return <LoginScreen onLogin={setUser}/>;
-
-  return (
-    <div className="min-h-screen pb-24 sm:pb-8">
-      {/* Topbar */}
-      <header className="sticky top-0 z-40 bg-[var(--paper)]/90 backdrop-blur border-b border-[var(--line)]">
-        <div className="max-w-3xl mx-auto px-5 h-14 flex items-center justify-between">
-          <span className="font-display text-2xl">旅 Tabi</span>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-[var(--muted)] hidden sm:inline">{user.name}</span>
-            <button onClick={()=>api.logout().then(()=>setUser(null))} className="text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="log-out"/></button>
-          </div>
-        </div>
-        {/* Desktop-Tabs */}
-        <nav className="hidden sm:flex max-w-3xl mx-auto px-5 gap-1 -mb-px">
-          {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setTab(t.key)}
-              className={`px-3 py-2 text-sm border-b-2 flex items-center gap-1.5 ${tab===t.key?"border-[var(--ai)] text-[var(--ai)]":"border-transparent text-[var(--muted)]"}`}>
-              <Icon name={t.icon}/> {t.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-
-      {/* Inhalt */}
-      <main className="max-w-3xl mx-auto px-5 py-6">
-        {tab==="dashboard" && <Dashboard trip={trip} onShare={share}/>}
-        {tab==="route"     && <Timeline trip={trip}/>}
-        {tab==="food"      && <Restaurants/>}
-        {tab==="spots"     && <Spots/>}
-        {tab==="logistics" && <Logistics/>}
-        {tab==="gallery"   && <Gallery user={user}/>}
-        {tab==="packing"   && <Packing/>}
-      </main>
-
-      {/* Mobile Bottom-Nav */}
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--paper)]/95 backdrop-blur border-t border-[var(--line)]">
-        <div className="flex justify-around py-2" style={{paddingBottom:"max(0.5rem, env(safe-area-inset-bottom))"}}>
-          {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setTab(t.key)}
-              className={`flex flex-col items-center gap-0.5 px-2 ${tab===t.key?"text-[var(--ai)]":"text-[var(--muted)]"}`}>
-              <Icon name={t.icon} size="1.2rem"/>
-              <span className="text-[10px]">{t.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {/* Teilen-Modal */}
-      <Modal open={!!shareLink} onClose={()=>setShareLink(null)} title="Reise teilen">
-        <p className="text-sm text-[var(--muted)] mb-3">Freunde können mit diesem Link mitlesen (read-only). Aktiv, sobald Supabase verbunden ist.</p>
-        <div className="flex gap-2">
-          <input className={inputCls} readOnly value={shareLink||""}/>
-          <button onClick={()=>{navigator.clipboard?.writeText(shareLink);}} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="copy"/></button>
-        </div>
-      </Modal>
-    </div>
+  var s=useState(null),user=s[0],setUser=s[1];
+  var s2=useState(false),ready=s2[0],setReady=s2[1];
+  var s3=useState("dashboard"),tab=s3[0],setTab=s3[1];
+  var s4=useState(SEED.trip),trip=s4[0],setTrip=s4[1];
+  var s5=useState(null),shareLink=s5[0],setShareLink=s5[1];
+  useEffect(function(){api.getSession().then(function(u){setUser(u);setReady(true);});},[]);
+  useEffect(function(){if(user)api.fetchTrip().then(setTrip);},[user]);
+  function share(){api.createShareLink().then(setShareLink);}
+  if(!ready) return h("div",{className:"min-h-screen flex items-center justify-center text-muted"},"Lädt…");
+  if(!user) return h(LoginScreen,{onLogin:setUser});
+  var view = tab==="dashboard"?h(Dashboard,{trip:trip,onShare:share}):
+             tab==="route"?h(Timeline,{trip:trip}):
+             tab==="food"?h(Restaurants,null):
+             tab==="spots"?h(Spots,null):
+             tab==="logistics"?h(Logistics,null):
+             tab==="gallery"?h(Gallery,{user:user}):
+             h(Packing,null);
+  return h("div",{className:"min-h-screen sm:pb-8",style:{paddingBottom:"6rem"}},
+    h("header",{className:"sticky top-0 z-40 border-b backdrop",style:{background:"rgba(250,248,244,.9)"}},
+      h("div",{className:"max-w-3xl mx-auto px-5 h-14 flex items-center justify-between"},
+        h("span",{className:"font-display text-2xl"},"旅 Tabi"),
+        h("div",{className:"flex items-center gap-3"},
+          h("span",{className:"text-sm text-muted sm:inline hidden"},user.name),
+          h("button",{className:"text-muted",onClick:function(){api.logout().then(function(){setUser(null);});}}, h(Icon,{name:"log-out"})))),
+      h("nav",{className:"sm:flex hidden max-w-3xl mx-auto px-5 gap-1"},
+        TABS.map(function(t){return h("button",{key:t.key,onClick:function(){setTab(t.key);},
+          className:"px-3 py-2 text-sm flex items-center gap-1",
+          style:{borderBottom:"2px solid "+(tab===t.key?"var(--ai)":"transparent"),color:tab===t.key?"var(--ai)":"var(--muted)"}},
+          h(Icon,{name:t.icon})," "+t.label);}))),
+    h("main",{className:"max-w-3xl mx-auto px-5 py-6"}, view),
+    h("nav",{className:"sm:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop",style:{background:"rgba(250,248,244,.95)"}},
+      h("div",{className:"flex justify-around py-2",style:{paddingBottom:"max(0.5rem, env(safe-area-inset-bottom))"}},
+        TABS.map(function(t){return h("button",{key:t.key,onClick:function(){setTab(t.key);},className:"flex flex-col items-center gap-1 px-2",
+          style:{color:tab===t.key?"var(--ai)":"var(--muted)"}},
+          h(Icon,{name:t.icon,size:"1.2rem"}), h("span",{style:{fontSize:"10px"}},t.label));}))),
+    h(Modal,{open:!!shareLink,onClose:function(){setShareLink(null);},title:"Reise teilen"},
+      h("p",{className:"text-sm text-muted mb-3"},"Freunde können mit diesem Link mitlesen (read-only). Aktiv, sobald Supabase verbunden ist."),
+      h("div",{className:"flex gap-2"},
+        h("input",{className:"inp",readOnly:true,value:shareLink||""}),
+        h("button",{className:"btn-primary px-3",onClick:function(){if(navigator.clipboard)navigator.clipboard.writeText(shareLink);}}, h(Icon,{name:"copy"}))))
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-// Icons nach erstem Render initialisieren
-setTimeout(()=>window.lucide && window.lucide.createIcons(), 300);
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+setTimeout(function(){ if(window.lucide) window.lucide.createIcons(); }, 400);
+
+})();
 </script>
 </body>
 </html>
