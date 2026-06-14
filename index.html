@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Tabi — Reiseplaner</title>
+
+<!-- ============================================================
+     TABI · Single-File Reise-SPA
+     Tech: React 18 (CDN) · Tailwind (CDN) · Lucide Icons (CDN)
+     Backend: Supabase ist als austauschbarer "api"-Layer
+              vorbereitet (siehe Abschnitt [1] DATA / API LAYER).
+              Aktuell laufen alle Funktionen gegen Dummy-Daten
+              + localStorage, damit das UI sofort testbar ist.
+     ============================================================ -->
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- React + ReactDOM -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<!-- Babel, damit wir JSX direkt im Browser schreiben können (kein Build-Schritt) -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<!-- Supabase JS (für später; wird erst aktiv wenn du Keys einträgst) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- PWA: "Zum Homescreen hinzufügen" (Manifest inline als data-URI) -->
+<link rel="manifest" href='data:application/json,{"name":"Tabi","short_name":"Tabi","start_url":".","display":"standalone","background_color":"%23FAF8F4","theme_color":"%232D3A5E"}'>
+<meta name="theme-color" content="#2D3A5E">
+
+<style>
+  :root{
+    --paper:#FAF8F4;      /* Off-White Papier */
+    --sumi:#1A1A1A;       /* Sumi-Tinte (Text) */
+    --ai:#2D3A5E;         /* Indigo Akzent */
+    --vermilion:#C8553D;  /* Zinnober Signal */
+    --line:#E7E2D8;       /* Trennlinien */
+    --muted:#8C8678;      /* gedämpfter Text */
+  }
+  body{ background:var(--paper); color:var(--sumi); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; }
+  .font-display{ font-family:'Cormorant',serif; }
+  .font-mono{ font-family:'JetBrains Mono',monospace; }
+  /* sanfte Tab-/View-Wechsel */
+  .fade-in{ animation:fadeIn .35s ease both; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  /* dezenter Scrollbar */
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:#d8d2c6; border-radius:4px; }
+  /* Karten-Pin Hintergrundgitter (stilisierte "Karte" ohne externe API) */
+  .map-grid{
+    background-color:#F0EDE5;
+    background-image:
+      linear-gradient(rgba(45,58,94,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45,58,94,.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  @media (prefers-reduced-motion: reduce){ .fade-in{ animation:none; } }
+  .icon{ width:1em; height:1em; display:inline-block; vertical-align:-.125em; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+/* ============================================================
+   [0] ICON-HELFER
+   Kleine Wrapper-Komponente für Lucide-Icons.
+   ============================================================ */
+function Icon({ name, className="", size }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = "";
+      const el = document.createElement("i");
+      el.setAttribute("data-lucide", name);
+      ref.current.appendChild(el);
+      if (window.lucide) window.lucide.createIcons({ icons: window.lucide.icons, attrs:{} });
+    }
+  }, [name]);
+  const style = size ? { width:size, height:size } : {};
+  return <span ref={ref} className={"inline-flex items-center justify-center "+className} style={style}></span>;
+}
+
+/* ============================================================
+   [1] DATA / API LAYER  ← HIER kommt später Supabase rein
+   ------------------------------------------------------------
+   Alles, was mit "Daten holen / speichern / Login" zu tun hat,
+   läuft NUR über dieses "api"-Objekt. Wenn dein Supabase-Projekt
+   bereit ist, ersetzt du den Inhalt der Funktionen durch echte
+   Supabase-Aufrufe — der Rest der App muss NICHT angefasst werden.
+
+   SCHRITT FÜR SUPABASE (später):
+   1) SUPABASE_URL und SUPABASE_ANON_KEY unten eintragen.
+   2) In den Funktionen die "DUMMY"-Blöcke durch die
+      auskommentierten "SUPABASE"-Zeilen ersetzen.
+   ============================================================ */
+
+const SUPABASE_URL = "";        // ← z.B. "https://xxxx.supabase.co"
+const SUPABASE_ANON_KEY = "";   // ← dein anon/public key
+
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+// localStorage-Helfer (Übergangsspeicher bis Supabase scharf ist)
+const store = {
+  get:(k,fallback)=>{ try{ const v=localStorage.getItem("tabi_"+k); return v?JSON.parse(v):fallback; }catch(e){ return fallback; } },
+  set:(k,v)=>{ try{ localStorage.setItem("tabi_"+k, JSON.stringify(v)); }catch(e){} },
+};
+
+const api = {
+  /* ---------- AUTH ---------- */
+  async login(email, password){
+    // SUPABASE:
+    // const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // if (error) throw error; return data.user;
+
+    // DUMMY: jeder nicht-leere Login klappt
+    if(!email || !password) throw new Error("Bitte E-Mail und Passwort eingeben.");
+    const user = { email, name: email.split("@")[0] };
+    store.set("session", user);
+    return user;
+  },
+  async logout(){
+    // SUPABASE: await supabase.auth.signOut();
+    store.set("session", null);
+  },
+  async getSession(){
+    // SUPABASE:
+    // const { data } = await supabase.auth.getSession();
+    // return data.session?.user ?? null;
+    return store.get("session", null);
+  },
+
+  /* ---------- DATEN (Realtime-fähig vorbereitet) ----------
+     Da min. 2 Personen befüllen, kommt später Realtime hierhin:
+     supabase.channel('trip').on('postgres_changes', …).subscribe()
+  */
+  async fetchTrip(){ return store.get("trip", SEED.trip); },
+  async fetchRestaurants(){ return store.get("restaurants", SEED.restaurants); },
+  async saveRestaurants(list){ store.set("restaurants", list); /* SUPABASE: upsert */ },
+  async fetchSpots(){ return store.get("spots", SEED.spots); },
+  async saveSpots(list){ store.set("spots", list); },
+  async fetchStays(){ return store.get("stays", SEED.stays); },
+  async saveStays(list){ store.set("stays", list); },
+  async fetchPacking(){ return store.get("packing", SEED.packing); },
+  async savePacking(list){ store.set("packing", list); },
+  async fetchPhotos(){ return store.get("photos", SEED.photos); },
+  async savePhotos(list){ store.set("photos", list); },
+
+  /* ---------- PLATZHALTER: brauchen zwingend Backend ---------- */
+  async uploadVoiceNote(blob){
+    // SUPABASE STORAGE:
+    // const path = `voice/${Date.now()}.webm`;
+    // const { data, error } = await supabase.storage.from('media').upload(path, blob);
+    // return supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
+    return Promise.resolve("local-only://voice-note"); // lokal nur als Hinweis
+  },
+  async createShareLink(){
+    // SUPABASE: erzeugt einen read-only Token/Eintrag für Beobachter.
+    // Hier nur ein simulierter Link.
+    const token = Math.random().toString(36).slice(2,10);
+    return `${location.origin}${location.pathname}?view=${token}`;
+  },
+
+  /* ---------- "Automatische Ergänzungen" via Claude-API ----------
+     Generiert z.B. einen kurzen Insider-Hinweis zu einem Ort.
+     Läuft live (kein Key nötig in dieser Umgebung). */
+  async aiSuggest(prompt){
+    try{
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:1000,
+          messages:[{ role:"user", content: prompt }]
+        })
+      });
+      const data = await res.json();
+      return data.content.map(b=>b.type==="text"?b.text:"").join("").trim();
+    }catch(e){ return "Konnte gerade keinen Vorschlag laden."; }
+  }
+};
+
+/* ============================================================
+   [2] DUMMY-DATEN (SEED)
+   Realistische Beispiele für Japan, Reisestart 9. Oktober.
+   ============================================================ */
+const TRIP_START = "2026-10-09T08:00:00";
+
+const SEED = {
+  trip: {
+    title: "Japan",
+    subtitle: "Tokio · Kyoto · Kanazawa",
+    start: TRIP_START,
+    end: "2026-10-22T20:00:00",
+    days: [
+      { day:1, date:"09.10.", city:"Tokio", items:[
+        {time:"14:00", title:"Ankunft Haneda (HND)", note:"Limousine-Bus ins Hotel", icon:"plane-landing"},
+        {time:"18:30", title:"Spaziergang Yanaka", note:"Altes Tokio, ruhig", icon:"footprints"},
+      ]},
+      { day:2, date:"10.10.", city:"Tokio", items:[
+        {time:"09:00", title:"Teamlab Planets", note:"Tickets vorab!", icon:"sparkles"},
+        {time:"20:00", title:"Dinner: Den", note:"Reservierung bestätigt", icon:"utensils"},
+      ]},
+      { day:3, date:"11.10.", city:"Kyoto", items:[
+        {time:"08:12", title:"Shinkansen Tokio→Kyoto", note:"Wagen 7, Sitz 11A/B", icon:"train-front"},
+        {time:"15:00", title:"Fushimi Inari (spät)", note:"Weniger Menschen", icon:"torii-gate"},
+      ]},
+    ]
+  },
+
+  // Mehrere Guides wählbar (nicht nur Michelin)
+  restaurants: [
+    { id:1, name:"Den", city:"Tokio", guide:"Michelin", award:"2 Sterne", cuisine:"Modern Kaiseki",
+      status:"Bestätigt", confirmedAt:"10.10. um 20:00", deposit:true, cancelBy:"07.10.",
+      closed:"So", note:"Signature: Dentucky Fried Chicken" },
+    { id:2, name:"Sushi Saito", city:"Tokio", guide:"Michelin", award:"3 Sterne", cuisine:"Sushi",
+      status:"Angefragt", followUp:"15.09.", deposit:true, cancelBy:"—", closed:"So/Mo", note:"Über Concierge anfragen" },
+    { id:3, name:"Giro Giro Hitoshina", city:"Kyoto", guide:"Michelin", award:"Bib Gourmand", cuisine:"Kaiseki leger",
+      status:"Wunschliste", deposit:false, closed:"—", note:"Bezahlbares Kaiseki" },
+    { id:4, name:"Narisawa", city:"Tokio", guide:"50 Best", award:"World's 50 Best", cuisine:"Innovative",
+      status:"Wunschliste", deposit:true, closed:"So/Mo", note:"Sehr schwer zu bekommen" },
+    { id:5, name:"Ramen Sen-no-Kaze", city:"Kanazawa", guide:"Gault&Millau", award:"Empfehlung", cuisine:"Ramen",
+      status:"Wunschliste", deposit:false, closed:"Mi", note:"Mittags weniger Andrang" },
+  ],
+
+  spots: [
+    { id:1, name:"Omoide Yokocho", city:"Tokio", secret:3, tags:["Aussichtspunkt","Vintage"],
+      note:"Enge Gassen, Yakitori-Rauch", maps:"Omoide Yokocho Tokyo", hours:"ab 17:00" },
+    { id:2, name:"Nakano Broadway", city:"Tokio", secret:4, tags:["Vintage","Local Crafts"],
+      note:"Retro-Sammlerparadies", maps:"Nakano Broadway", hours:"10–20" },
+    { id:3, name:"Keage Incline", city:"Kyoto", secret:4, tags:["Lost Places","Aussichtspunkt"],
+      note:"Alte Bahntrasse, fotogen", maps:"Keage Incline Kyoto", hours:"immer" },
+    { id:4, name:"D&Department Kyoto", city:"Kyoto", secret:5, tags:["Local Crafts","Vintage"],
+      note:"Design-Laden im Tempel", maps:"D&Department Kyoto", hours:"11–18, Mi zu" },
+  ],
+
+  stays: [
+    { id:1, type:"Unterkunft", name:"Hotel Niwa Tokyo", city:"Tokio", from:"09.10.", to:"11.10.",
+      detail:"Ryokan-Stil, zentral", icon:"bed-double" },
+    { id:2, type:"Transport", name:"Shinkansen Nozomi", city:"Tokio→Kyoto", from:"11.10. 08:12", to:"11.10. 10:25",
+      detail:"Reserviert, Wagen 7", icon:"train-front" },
+    { id:3, type:"Unterkunft", name:"Machiya Townhouse", city:"Kyoto", from:"11.10.", to:"16.10.",
+      detail:"Traditionelles Stadthaus", icon:"bed-double" },
+    { id:4, type:"Veranstaltung", name:"Kabuki-za Theater", city:"Tokio", from:"10.10. 16:30", to:"—",
+      detail:"Einzelakt-Ticket", icon:"ticket" },
+  ],
+
+  packing: [
+    { id:1, label:"Reisepass + Kopie", done:true },
+    { id:2, label:"JR Pass / Suica-Karte", done:false },
+    { id:3, label:"Steckdosen-Adapter (Typ A)", done:false },
+    { id:4, label:"Leichte Regenjacke", done:false },
+    { id:5, label:"Bargeld (Yen)", done:false },
+  ],
+
+  photos: [
+    { id:1, city:"Tokio", caption:"Erster Abend in Yanaka", color:"#2D3A5E", comments:[{by:"Mira", text:"Wie schön ruhig dort!"}] },
+    { id:2, city:"Kyoto", caption:"Morgennebel am Fushimi Inari", color:"#C8553D", comments:[] },
+  ],
+};
+
+// Guides + Auszeichnungen (für Filter & Eingabe)
+const GUIDES = {
+  "Michelin":   ["3 Sterne","2 Sterne","1 Stern","Bib Gourmand"],
+  "Gault&Millau":["19–20 Pkt","17–18 Pkt","15–16 Pkt","Empfehlung"],
+  "50 Best":    ["World's 50 Best","Asia's 50 Best"],
+  "Tabelog":    ["Gold","Silver","Bronze"],
+};
+const STATUS = {
+  "Wunschliste":{ bg:"bg-stone-100", text:"text-stone-600", dot:"#8C8678" },
+  "Angefragt":  { bg:"bg-amber-50",  text:"text-amber-700", dot:"#D9912B" },
+  "Bestätigt":  { bg:"bg-emerald-50",text:"text-emerald-700",dot:"#2F855A" },
+};
+
+/* ============================================================
+   [3] WIEDERVERWENDBARE UI-BAUSTEINE
+   ============================================================ */
+function Badge({ children, color, bg }){
+  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${bg||"bg-stone-100"} ${color||"text-stone-600"}`}>{children}</span>;
+}
+
+function Modal({ open, onClose, title, children }){
+  if(!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative bg-[var(--paper)] w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl border border-[var(--line)] shadow-2xl max-h-[90vh] overflow-y-auto fade-in">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--line)] sticky top-0 bg-[var(--paper)]">
+          <h3 className="font-display text-2xl">{title}</h3>
+          <button onClick={onClose} className="p-2 -m-2 text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="x"/></button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }){
+  return (
+    <label className="block mb-3">
+      <span className="block text-xs uppercase tracking-wider text-[var(--muted)] mb-1">{label}</span>
+      {children}
+    </label>
+  );
+}
+const inputCls = "w-full px-3 py-2 bg-white border border-[var(--line)] rounded-lg text-sm focus:outline-none focus:border-[var(--ai)] focus:ring-1 focus:ring-[var(--ai)]";
+
+// Geheimtipp-Skala 1–5 als Schloss-Reihe
+function SecretScale({ value }){
+  return (
+    <span className="inline-flex gap-0.5" title={`Geheimtipp ${value}/5`}>
+      {[1,2,3,4,5].map(i=>(
+        <span key={i} className="text-sm" style={{ color: i<=value ? "var(--vermilion)" : "var(--line)" }}>
+          <Icon name="lock"/>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/* ============================================================
+   [4] AUTH — LOGIN-SCREEN
+   ============================================================ */
+function LoginScreen({ onLogin }){
+  const [email,setEmail]=useState("");
+  const [pw,setPw]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  async function submit(){
+    setErr(""); setBusy(true);
+    try{ const u = await api.login(email,pw); onLogin(u); }
+    catch(e){ setErr(e.message); }
+    finally{ setBusy(false); }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-sm fade-in">
+        <div className="text-center mb-10">
+          <div className="font-display text-6xl tracking-tight">旅</div>
+          <h1 className="font-display text-4xl mt-2">Tabi</h1>
+          <p className="text-[var(--muted)] text-sm mt-1">Euer Reiseplaner für Japan</p>
+        </div>
+        <div className="space-y-3">
+          <input className={inputCls} type="email" placeholder="E-Mail" value={email}
+                 onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} />
+          <input className={inputCls} type="password" placeholder="Passwort" value={pw}
+                 onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} />
+          {err && <p className="text-[var(--vermilion)] text-sm">{err}</p>}
+          <button onClick={submit} disabled={busy}
+                  className="w-full py-3 bg-[var(--ai)] text-white rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50">
+            {busy ? "Anmelden…" : "Anmelden"}
+          </button>
+        </div>
+        <p className="text-center text-xs text-[var(--muted)] mt-6">
+          Geschützter Bereich · später über Supabase abgesichert
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   [5] COUNTDOWN
+   ============================================================ */
+function Countdown({ target }){
+  const [now,setNow]=useState(Date.now());
+  useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(t); },[]);
+  const diff = Math.max(0, new Date(target).getTime()-now);
+  const d=Math.floor(diff/86400000), h=Math.floor(diff/3600000)%24, m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
+  const Unit=({v,l})=>(
+    <div className="text-center">
+      <div className="font-mono text-3xl sm:text-4xl tabular-nums">{String(v).padStart(2,"0")}</div>
+      <div className="text-[10px] uppercase tracking-widest text-[var(--muted)] mt-1">{l}</div>
+    </div>
+  );
+  return (
+    <div className="flex gap-4 sm:gap-8 justify-center">
+      <Unit v={d} l="Tage"/><Unit v={h} l="Std"/><Unit v={m} l="Min"/><Unit v={s} l="Sek"/>
+    </div>
+  );
+}
+
+/* ============================================================
+   [6] VIEWS
+   ============================================================ */
+
+// --- Dashboard ---
+function Dashboard({ trip, onShare }){
+  const [aiTip,setAiTip]=useState("");
+  const [loadingTip,setLoadingTip]=useState(false);
+
+  async function loadTip(){
+    setLoadingTip(true);
+    const t = await api.aiSuggest("Gib mir EINEN kurzen, originellen Insider-Tipp (max 2 Sätze, auf Deutsch) für eine Japanreise im Oktober. Kein Smalltalk, nur den Tipp.");
+    setAiTip(t); setLoadingTip(false);
+  }
+  useEffect(()=>{ loadTip(); },[]);
+
+  return (
+    <div className="fade-in space-y-6">
+      <div className="rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-[var(--muted)]">Nächste Reise</p>
+            <h2 className="font-display text-5xl sm:text-6xl mt-1">{trip.title}</h2>
+            <p className="text-[var(--muted)] mt-1">{trip.subtitle}</p>
+          </div>
+          <button onClick={onShare} className="flex items-center gap-1.5 text-sm text-[var(--ai)] hover:underline shrink-0">
+            <Icon name="share-2"/> Teilen
+          </button>
+        </div>
+        <div className="my-8"><Countdown target={trip.start}/></div>
+        <div className="text-center text-sm text-[var(--muted)]">
+          {new Date(trip.start).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"})}
+          {" — "}
+          {new Date(trip.end).toLocaleDateString("de-CH",{day:"2-digit",month:"long",year:"numeric"})}
+        </div>
+      </div>
+
+      {/* Stilisierte interaktive Karte (Pins). Tippen öffnet Google Maps. */}
+      <div className="rounded-2xl border border-[var(--line)] overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--line)] flex items-center gap-2 bg-white">
+          <Icon name="map" className="text-[var(--ai)]"/> <span className="font-medium">Reisekarte</span>
+        </div>
+        <div className="map-grid relative h-56">
+          {[{n:"Tokio",x:"70%",y:"55%"},{n:"Kyoto",x:"42%",y:"62%"},{n:"Kanazawa",x:"38%",y:"40%"}].map((p,i)=>(
+            <a key={i} href={`https://www.google.com/maps/search/${encodeURIComponent(p.n+" Japan")}`} target="_blank"
+               className="absolute -translate-x-1/2 -translate-y-1/2 group" style={{left:p.x,top:p.y}}>
+              <span className="block text-[var(--vermilion)]"><Icon name="map-pin" size="1.6rem"/></span>
+              <span className="absolute left-1/2 -translate-x-1/2 mt-1 text-xs font-medium bg-white/90 px-1.5 py-0.5 rounded whitespace-nowrap">{p.n}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Automatische Ergänzung (Claude) */}
+      <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-2 font-medium"><Icon name="wand-sparkles" className="text-[var(--ai)]"/> Tipp des Tages</span>
+          <button onClick={loadTip} className="text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="refresh-cw"/></button>
+        </div>
+        <p className="text-sm text-[var(--muted)] leading-relaxed">{loadingTip ? "Lädt…" : aiTip}</p>
+      </div>
+    </div>
+  );
+}
+
+// --- Timeline ---
+function Timeline({ trip }){
+  const [open,setOpen]=useState(trip.days[0]?.day);
+  return (
+    <div className="fade-in space-y-3">
+      <h2 className="font-display text-3xl mb-2">Route</h2>
+      {trip.days.map(d=>(
+        <div key={d.day} className="rounded-xl border border-[var(--line)] bg-white overflow-hidden">
+          <button onClick={()=>setOpen(open===d.day?null:d.day)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left">
+            <span className="flex items-center gap-4">
+              <span className="font-mono text-xs text-[var(--muted)] w-12">Tag {d.day}</span>
+              <span className="font-medium">{d.city}</span>
+              <span className="text-sm text-[var(--muted)]">{d.date}</span>
+            </span>
+            <Icon name={open===d.day?"chevron-up":"chevron-down"} className="text-[var(--muted)]"/>
+          </button>
+          {open===d.day && (
+            <div className="px-5 pb-4 space-y-3 border-t border-[var(--line)] pt-3 fade-in">
+              {d.items.map((it,i)=>(
+                <div key={i} className="flex gap-3">
+                  <span className="font-mono text-xs text-[var(--ai)] w-12 shrink-0 pt-0.5">{it.time}</span>
+                  <span className="text-[var(--ai)] pt-0.5"><Icon name={it.icon}/></span>
+                  <div>
+                    <p className="font-medium text-sm">{it.title}</p>
+                    <p className="text-xs text-[var(--muted)]">{it.note}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Restaurants ---
+function Restaurants(){
+  const [list,setList]=useState([]);
+  const [filter,setFilter]=useState("Alle");
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({ name:"",city:"",guide:"Michelin",award:"1 Stern",cuisine:"",status:"Wunschliste",confirmedAt:"",followUp:"",cancelBy:"",closed:"",deposit:false,note:"" });
+
+  useEffect(()=>{ api.fetchRestaurants().then(setList); },[]);
+  function persist(next){ setList(next); api.saveRestaurants(next); }
+
+  const awards = useMemo(()=>["Alle", ...new Set(list.map(r=>r.award))],[list]);
+  const shown = filter==="Alle" ? list : list.filter(r=>r.award===filter);
+
+  function add(){
+    if(!form.name) return;
+    persist([...list, { ...form, id:Date.now() }]);
+    setModal(false);
+    setForm({ name:"",city:"",guide:"Michelin",award:"1 Stern",cuisine:"",status:"Wunschliste",confirmedAt:"",followUp:"",cancelBy:"",closed:"",deposit:false,note:"" });
+  }
+  function statusKey(s){ return STATUS[s] || STATUS["Wunschliste"]; }
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display text-3xl">Restaurants</h2>
+        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+        {awards.map(a=>(
+          <button key={a} onClick={()=>setFilter(a)}
+            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap border ${filter===a?"bg-[var(--sumi)] text-white border-[var(--sumi)]":"border-[var(--line)] text-[var(--muted)]"}`}>{a}</button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {shown.map(r=>{
+          const sk = statusKey(r.status);
+          return (
+            <div key={r.id} className="rounded-xl border border-[var(--line)] bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-medium">{r.name}</h3>
+                    <Badge>{r.guide} · {r.award}</Badge>
+                  </div>
+                  <p className="text-sm text-[var(--muted)] mt-0.5">{r.city} · {r.cuisine}</p>
+                </div>
+                <Badge bg={sk.bg} color={sk.text}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{background:sk.dot}}></span>
+                  {r.status==="Bestätigt" && r.confirmedAt ? `Bestätigt · ${r.confirmedAt}` : r.status}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-[var(--muted)]">
+                {r.status==="Angefragt" && r.followUp && <span className="flex items-center gap-1"><Icon name="bell"/> Nachhaken: {r.followUp}</span>}
+                {r.deposit && <span className="flex items-center gap-1"><Icon name="credit-card"/> Kreditkarten-Garantie</span>}
+                {r.cancelBy && r.cancelBy!=="—" && <span className="flex items-center gap-1"><Icon name="calendar-x"/> Storno bis {r.cancelBy}</span>}
+                {r.closed && r.closed!=="—" && <span className="flex items-center gap-1"><Icon name="door-closed"/> Ruhetag {r.closed}</span>}
+              </div>
+              {r.note && <p className="text-xs text-[var(--muted)] mt-2 italic">{r.note}</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      <Modal open={modal} onClose={()=>setModal(false)} title="Restaurant hinzufügen">
+        <Field label="Name"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Stadt"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
+          <Field label="Küche"><input className={inputCls} value={form.cuisine} onChange={e=>setForm({...form,cuisine:e.target.value})}/></Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Guide">
+            <select className={inputCls} value={form.guide} onChange={e=>setForm({...form,guide:e.target.value,award:GUIDES[e.target.value][0]})}>
+              {Object.keys(GUIDES).map(g=><option key={g}>{g}</option>)}
+            </select>
+          </Field>
+          <Field label="Auszeichnung">
+            <select className={inputCls} value={form.award} onChange={e=>setForm({...form,award:e.target.value})}>
+              {GUIDES[form.guide].map(a=><option key={a}>{a}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Field label="Status">
+          <select className={inputCls} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+            {Object.keys(STATUS).map(s=><option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        {form.status==="Bestätigt" && <Field label="Bestätigt am"><input className={inputCls} placeholder="z.B. 10.10. um 20:00" value={form.confirmedAt} onChange={e=>setForm({...form,confirmedAt:e.target.value})}/></Field>}
+        {form.status==="Angefragt" && <Field label="Nachhaken am"><input className={inputCls} placeholder="z.B. 15.09." value={form.followUp} onChange={e=>setForm({...form,followUp:e.target.value})}/></Field>}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Stornofrist"><input className={inputCls} value={form.cancelBy} onChange={e=>setForm({...form,cancelBy:e.target.value})}/></Field>
+          <Field label="Ruhetag"><input className={inputCls} placeholder="z.B. So/Mo" value={form.closed} onChange={e=>setForm({...form,closed:e.target.value})}/></Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm mb-3"><input type="checkbox" checked={form.deposit} onChange={e=>setForm({...form,deposit:e.target.checked})}/> Kreditkarten-Garantie / Anzahlung nötig</label>
+        <Field label="Notiz"><textarea className={inputCls} rows="2" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></Field>
+        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
+      </Modal>
+    </div>
+  );
+}
+
+// --- Spots / Entdecker ---
+function Spots(){
+  const [list,setList]=useState([]);
+  const [tag,setTag]=useState("Alle");
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({ name:"",city:"",secret:3,tags:[],note:"",maps:"",hours:"" });
+  const ALL_TAGS=["Vintage","Local Crafts","Lost Places","Aussichtspunkt"];
+
+  useEffect(()=>{ api.fetchSpots().then(setList); },[]);
+  function persist(next){ setList(next); api.saveSpots(next); }
+  const tags=["Alle",...ALL_TAGS];
+  const shown = tag==="Alle" ? list : list.filter(s=>s.tags.includes(tag));
+
+  function toggleTag(t){ setForm(f=>({...f, tags: f.tags.includes(t)?f.tags.filter(x=>x!==t):[...f.tags,t]})); }
+  function add(){
+    if(!form.name) return;
+    persist([...list, {...form, id:Date.now()}]);
+    setModal(false);
+    setForm({ name:"",city:"",secret:3,tags:[],note:"",maps:"",hours:"" });
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display text-3xl">Entdecken</h2>
+        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+        {tags.map(t=>(
+          <button key={t} onClick={()=>setTag(t)}
+            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap border ${tag===t?"bg-[var(--sumi)] text-white border-[var(--sumi)]":"border-[var(--line)] text-[var(--muted)]"}`}>{t}</button>
+        ))}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {shown.map(s=>(
+          <div key={s.id} className="rounded-xl border border-[var(--line)] bg-white p-4">
+            <div className="flex items-start justify-between">
+              <h3 className="font-medium">{s.name}</h3>
+              <SecretScale value={s.secret}/>
+            </div>
+            <p className="text-sm text-[var(--muted)]">{s.city}{s.hours?` · ${s.hours}`:""}</p>
+            <p className="text-sm mt-2">{s.note}</p>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {s.tags.map(t=><Badge key={t} bg="bg-[var(--paper)]" color="text-[var(--ai)]">{t}</Badge>)}
+            </div>
+            {s.maps && <a href={`https://www.google.com/maps/search/${encodeURIComponent(s.maps)}`} target="_blank"
+               className="inline-flex items-center gap-1 text-xs text-[var(--ai)] mt-3 hover:underline"><Icon name="map-pin"/> Auf Karte öffnen</a>}
+          </div>
+        ))}
+      </div>
+
+      <Modal open={modal} onClose={()=>setModal(false)} title="Geheimtipp hinzufügen">
+        <Field label="Name"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Stadt"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
+          <Field label="Öffnungszeiten"><input className={inputCls} value={form.hours} onChange={e=>setForm({...form,hours:e.target.value})}/></Field>
+        </div>
+        <Field label={`Geheimtipp-Skala: ${form.secret}/5`}>
+          <input type="range" min="1" max="5" value={form.secret} onChange={e=>setForm({...form,secret:+e.target.value})} className="w-full accent-[var(--vermilion)]"/>
+        </Field>
+        <Field label="Tags">
+          <div className="flex flex-wrap gap-2">
+            {ALL_TAGS.map(t=>(
+              <button key={t} onClick={()=>toggleTag(t)}
+                className={`px-3 py-1 rounded-full text-sm border ${form.tags.includes(t)?"bg-[var(--ai)] text-white border-[var(--ai)]":"border-[var(--line)] text-[var(--muted)]"}`}>{t}</button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Google-Maps-Suchbegriff"><input className={inputCls} value={form.maps} onChange={e=>setForm({...form,maps:e.target.value})}/></Field>
+        <Field label="Notiz"><textarea className={inputCls} rows="2" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></Field>
+        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
+      </Modal>
+    </div>
+  );
+}
+
+// --- Logistik (Unterkunft / Transport / Veranstaltung) ---
+function Logistics(){
+  const [list,setList]=useState([]);
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({ type:"Unterkunft",name:"",city:"",from:"",to:"",detail:"" });
+  const ICONS={ "Unterkunft":"bed-double","Transport":"train-front","Veranstaltung":"ticket" };
+
+  useEffect(()=>{ api.fetchStays().then(setList); },[]);
+  function persist(next){ setList(next); api.saveStays(next); }
+  function add(){
+    if(!form.name) return;
+    persist([...list, {...form, id:Date.now(), icon:ICONS[form.type]}]);
+    setModal(false);
+    setForm({ type:"Unterkunft",name:"",city:"",from:"",to:"",detail:"" });
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display text-3xl">Logistik</h2>
+        <button onClick={()=>setModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ai)] text-white rounded-lg text-sm"><Icon name="plus"/> Neu</button>
+      </div>
+      <div className="space-y-3">
+        {list.map(s=>(
+          <div key={s.id} className="rounded-xl border border-[var(--line)] bg-white p-4 flex gap-4">
+            <span className="text-[var(--ai)] mt-0.5"><Icon name={s.icon} size="1.3rem"/></span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2"><h3 className="font-medium">{s.name}</h3><Badge>{s.type}</Badge></div>
+              <p className="text-sm text-[var(--muted)]">{s.city}</p>
+              <p className="text-xs text-[var(--muted)] mt-1">{s.from} → {s.to}{s.detail?` · ${s.detail}`:""}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={modal} onClose={()=>setModal(false)} title="Eintrag hinzufügen">
+        <Field label="Typ">
+          <select className={inputCls} value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
+            <option>Unterkunft</option><option>Transport</option><option>Veranstaltung</option>
+          </select>
+        </Field>
+        <Field label="Name / Bezeichnung"><input className={inputCls} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></Field>
+        <Field label="Ort / Strecke"><input className={inputCls} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}/></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Von"><input className={inputCls} value={form.from} onChange={e=>setForm({...form,from:e.target.value})}/></Field>
+          <Field label="Bis"><input className={inputCls} value={form.to} onChange={e=>setForm({...form,to:e.target.value})}/></Field>
+        </div>
+        <Field label="Detail"><input className={inputCls} value={form.detail} onChange={e=>setForm({...form,detail:e.target.value})}/></Field>
+        <button onClick={add} className="w-full py-2.5 bg-[var(--ai)] text-white rounded-lg font-medium">Speichern</button>
+      </Modal>
+    </div>
+  );
+}
+
+// --- Galerie (Fotos + Kommentare + Sprachnotiz-Platzhalter) ---
+function Gallery({ user }){
+  const [photos,setPhotos]=useState([]);
+  const [active,setActive]=useState(null);
+  const [text,setText]=useState("");
+  const [recording,setRecording]=useState(false);
+
+  useEffect(()=>{ api.fetchPhotos().then(setPhotos); },[]);
+  function persist(next){ setPhotos(next); api.savePhotos(next); }
+
+  function addComment(){
+    if(!text || active==null) return;
+    const next = photos.map(p=>p.id===active ? {...p, comments:[...p.comments,{by:user.name,text}]} : p);
+    persist(next); setText("");
+  }
+  // Sprachaufnahme: nimmt im Browser auf; Speichern braucht später Supabase Storage
+  async function toggleVoice(){
+    if(recording){ setRecording(false); return; }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      const rec = new MediaRecorder(stream); const chunks=[];
+      rec.ondataavailable=e=>chunks.push(e.data);
+      rec.onstop=async()=>{ const blob=new Blob(chunks); await api.uploadVoiceNote(blob); stream.getTracks().forEach(t=>t.stop()); };
+      rec.start(); setRecording(true);
+      setTimeout(()=>{ if(rec.state!=="inactive"){ rec.stop(); setRecording(false); } },5000);
+    }catch(e){ alert("Mikrofonzugriff nicht möglich (im Browser auf GitHub Pages aktivierbar)."); }
+  }
+
+  const activePhoto = photos.find(p=>p.id===active);
+
+  return (
+    <div className="fade-in">
+      <h2 className="font-display text-3xl mb-3">Galerie</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {photos.map(p=>(
+          <button key={p.id} onClick={()=>setActive(p.id)} className="text-left group">
+            <div className="aspect-square rounded-xl flex items-end p-3" style={{background:`linear-gradient(135deg, ${p.color}, ${p.color}cc)`}}>
+              <span className="text-white text-sm font-medium drop-shadow">{p.caption}</span>
+            </div>
+            <p className="text-xs text-[var(--muted)] mt-1 flex items-center gap-1"><Icon name="message-circle"/> {p.comments.length} · {p.city}</p>
+          </button>
+        ))}
+      </div>
+
+      <Modal open={active!=null} onClose={()=>setActive(null)} title={activePhoto?.caption||""}>
+        {activePhoto && (
+          <div>
+            <div className="aspect-video rounded-xl mb-4" style={{background:`linear-gradient(135deg, ${activePhoto.color}, ${activePhoto.color}cc)`}}></div>
+            <p className="text-xs uppercase tracking-wider text-[var(--muted)] mb-2">Kommentare</p>
+            <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+              {activePhoto.comments.length===0 && <p className="text-sm text-[var(--muted)]">Noch keine Kommentare.</p>}
+              {activePhoto.comments.map((c,i)=>(
+                <div key={i} className="text-sm"><span className="font-medium">{c.by}:</span> <span className="text-[var(--muted)]">{c.text}</span></div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input className={inputCls} placeholder="Kommentar schreiben…" value={text}
+                     onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addComment()}/>
+              <button onClick={toggleVoice} title="Sprachnotiz (5 Sek.)"
+                      className={`px-3 rounded-lg border ${recording?"bg-[var(--vermilion)] text-white border-[var(--vermilion)]":"border-[var(--line)] text-[var(--ai)]"}`}>
+                <Icon name={recording?"square":"mic"}/>
+              </button>
+              <button onClick={addComment} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="send"/></button>
+            </div>
+            <p className="text-[10px] text-[var(--muted)] mt-2">Sprachnotizen werden gespeichert, sobald Supabase Storage verbunden ist.</p>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// --- Packliste ---
+function Packing(){
+  const [list,setList]=useState([]);
+  const [text,setText]=useState("");
+  useEffect(()=>{ api.fetchPacking().then(setList); },[]);
+  function persist(next){ setList(next); api.savePacking(next); }
+  function toggle(id){ persist(list.map(i=>i.id===id?{...i,done:!i.done}:i)); }
+  function add(){ if(!text)return; persist([...list,{id:Date.now(),label:text,done:false}]); setText(""); }
+  function remove(id){ persist(list.filter(i=>i.id!==id)); }
+  const doneCount=list.filter(i=>i.done).length;
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="font-display text-3xl">Packliste</h2>
+        <span className="text-sm text-[var(--muted)] font-mono">{doneCount}/{list.length}</span>
+      </div>
+      <div className="flex gap-2 mb-4">
+        <input className={inputCls} placeholder="Etwas hinzufügen…" value={text}
+               onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/>
+        <button onClick={add} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="plus"/></button>
+      </div>
+      <div className="space-y-2">
+        {list.map(i=>(
+          <div key={i.id} className="flex items-center gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-2.5 group">
+            <button onClick={()=>toggle(i.id)} className={`w-5 h-5 rounded border flex items-center justify-center ${i.done?"bg-[var(--ai)] border-[var(--ai)] text-white":"border-[var(--line)]"}`}>
+              {i.done && <Icon name="check" size="0.8rem"/>}
+            </button>
+            <span className={`flex-1 text-sm ${i.done?"line-through text-[var(--muted)]":""}`}>{i.label}</span>
+            <button onClick={()=>remove(i.id)} className="text-[var(--muted)] opacity-0 group-hover:opacity-100"><Icon name="trash-2" size="1rem"/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   [7] APP-SHELL (Navigation + Auth-Gate)
+   ============================================================ */
+const TABS = [
+  { key:"dashboard", label:"Start",     icon:"home" },
+  { key:"route",     label:"Route",     icon:"route" },
+  { key:"food",      label:"Essen",     icon:"utensils" },
+  { key:"spots",     label:"Entdecken", icon:"compass" },
+  { key:"logistics", label:"Logistik",  icon:"luggage" },
+  { key:"gallery",   label:"Galerie",   icon:"image" },
+  { key:"packing",   label:"Packen",    icon:"list-checks" },
+];
+
+function App(){
+  const [user,setUser]=useState(null);
+  const [ready,setReady]=useState(false);
+  const [tab,setTab]=useState("dashboard");
+  const [trip,setTrip]=useState(SEED.trip);
+  const [shareLink,setShareLink]=useState(null);
+
+  useEffect(()=>{ api.getSession().then(u=>{ setUser(u); setReady(true); }); },[]);
+  useEffect(()=>{ if(user) api.fetchTrip().then(setTrip); },[user]);
+
+  async function share(){ const l = await api.createShareLink(); setShareLink(l); }
+
+  if(!ready) return <div className="min-h-screen flex items-center justify-center text-[var(--muted)]">Lädt…</div>;
+  if(!user) return <LoginScreen onLogin={setUser}/>;
+
+  return (
+    <div className="min-h-screen pb-24 sm:pb-8">
+      {/* Topbar */}
+      <header className="sticky top-0 z-40 bg-[var(--paper)]/90 backdrop-blur border-b border-[var(--line)]">
+        <div className="max-w-3xl mx-auto px-5 h-14 flex items-center justify-between">
+          <span className="font-display text-2xl">旅 Tabi</span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[var(--muted)] hidden sm:inline">{user.name}</span>
+            <button onClick={()=>api.logout().then(()=>setUser(null))} className="text-[var(--muted)] hover:text-[var(--sumi)]"><Icon name="log-out"/></button>
+          </div>
+        </div>
+        {/* Desktop-Tabs */}
+        <nav className="hidden sm:flex max-w-3xl mx-auto px-5 gap-1 -mb-px">
+          {TABS.map(t=>(
+            <button key={t.key} onClick={()=>setTab(t.key)}
+              className={`px-3 py-2 text-sm border-b-2 flex items-center gap-1.5 ${tab===t.key?"border-[var(--ai)] text-[var(--ai)]":"border-transparent text-[var(--muted)]"}`}>
+              <Icon name={t.icon}/> {t.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* Inhalt */}
+      <main className="max-w-3xl mx-auto px-5 py-6">
+        {tab==="dashboard" && <Dashboard trip={trip} onShare={share}/>}
+        {tab==="route"     && <Timeline trip={trip}/>}
+        {tab==="food"      && <Restaurants/>}
+        {tab==="spots"     && <Spots/>}
+        {tab==="logistics" && <Logistics/>}
+        {tab==="gallery"   && <Gallery user={user}/>}
+        {tab==="packing"   && <Packing/>}
+      </main>
+
+      {/* Mobile Bottom-Nav */}
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--paper)]/95 backdrop-blur border-t border-[var(--line)]">
+        <div className="flex justify-around py-2" style={{paddingBottom:"max(0.5rem, env(safe-area-inset-bottom))"}}>
+          {TABS.map(t=>(
+            <button key={t.key} onClick={()=>setTab(t.key)}
+              className={`flex flex-col items-center gap-0.5 px-2 ${tab===t.key?"text-[var(--ai)]":"text-[var(--muted)]"}`}>
+              <Icon name={t.icon} size="1.2rem"/>
+              <span className="text-[10px]">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Teilen-Modal */}
+      <Modal open={!!shareLink} onClose={()=>setShareLink(null)} title="Reise teilen">
+        <p className="text-sm text-[var(--muted)] mb-3">Freunde können mit diesem Link mitlesen (read-only). Aktiv, sobald Supabase verbunden ist.</p>
+        <div className="flex gap-2">
+          <input className={inputCls} readOnly value={shareLink||""}/>
+          <button onClick={()=>{navigator.clipboard?.writeText(shareLink);}} className="px-3 bg-[var(--ai)] text-white rounded-lg"><Icon name="copy"/></button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+// Icons nach erstem Render initialisieren
+setTimeout(()=>window.lucide && window.lucide.createIcons(), 300);
+</script>
+</body>
+</html>
